@@ -1,21 +1,26 @@
 "use client";
 
-import { useState } from "react"; // <-- Añadimos estado
-import { LayoutDashboard, Calendar as CalendarIcon, Users, Settings, Scissors, Menu, X } from "lucide-react";
+import { useState } from "react";
+// Importamos 'Tags' para los servicios
+import { LayoutDashboard, Users, Scissors, Menu, X, Tags, Banknote } from "lucide-react";
+import Link from "next/link"; 
+import { usePathname } from "next/navigation"; 
 
 export default function Sidebar() {
-  const [isOpen, setIsOpen] = useState(false); // Estado para abrir/cerrar en móvil
+  const [isOpen, setIsOpen] = useState(false);
+  const pathname = usePathname(); 
 
+  // Añadimos la nueva ruta al array
   const menuItems = [
-    { icon: LayoutDashboard, label: "Panel", active: true },
-    { icon: CalendarIcon, label: "Agenda", active: false },
-    { icon: Users, label: "Clientes", active: false },
-    { icon: Settings, label: "Ajustes", active: false },
+    { icon: LayoutDashboard, label: "Agenda", href: "/" },
+    { icon: Users, label: "Profesionales", href: "/staff" },
+    { icon: Tags, label: "Servicios", href: "/servicios" },
+    { icon: Banknote, label: "Finanzas", href: "/ingresos" }, 
   ];
 
   return (
     <>
-      {/* Botón Hamburguesa (Solo visible en móviles) */}
+      {/* Botón Móvil */}
       <button 
         onClick={() => setIsOpen(!isOpen)}
         className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-white border border-slate-200 rounded-md shadow-sm"
@@ -37,24 +42,28 @@ export default function Sidebar() {
         </div>
 
         <nav className="flex-1 p-4 space-y-2">
-          {menuItems.map((item) => (
-            <a
-              key={item.label}
-              href="#"
-              className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-                item.active 
-                  ? "bg-indigo-50 text-indigo-700" 
-                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-              }`}
-            >
-              <item.icon size={18} />
-              {item.label}
-            </a>
-          ))}
+          {menuItems.map((item) => {
+            const isActive = pathname === item.href;
+            return (
+              <Link
+                key={item.label}
+                href={item.href}
+                onClick={() => setIsOpen(false)} // Cierra el menú en móvil al hacer clic
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                  isActive 
+                    ? "bg-indigo-50 text-indigo-700" 
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                }`}
+              >
+                <item.icon size={18} />
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
       </aside>
 
-      {/* Overlay para cerrar el menú al tocar fuera (Solo móvil) */}
+      {/* Overlay Móvil */}
       {isOpen && (
         <div 
           onClick={() => setIsOpen(false)}
