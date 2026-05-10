@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Plus } from "lucide-react";
-import { supabase } from "@/lib/supabase"; // <-- Importamos nuestra conexión
+import { supabase } from "@/lib/supabase";
 import {
   Dialog,
   DialogContent,
@@ -15,29 +15,28 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 
-export default function NewAppointmentButton() {
+// Definimos que este componente ahora espera una función de aviso
+interface NewAppointmentProps {
+  onAppointmentCreated: () => void;
+}
+
+export default function NewAppointmentButton({ onAppointmentCreated }: NewAppointmentProps) {
   const [open, setOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false); // Para mostrar "Guardando..."
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    // 1. Extraer los datos del formulario
     const formData = new FormData(e.currentTarget);
     const nombre = formData.get("name") as string;
     const servicio = formData.get("service") as string;
     const fecha = formData.get("date") as string;
     const hora = formData.get("time") as string;
 
-    // 2. Unir fecha y hora para Supabase
-    // Formato: "YYYY-MM-DDTHH:MM:00"
     const fechaInicio = new Date(`${fecha}T${hora}:00`);
-    
-    // Calculamos la fecha de fin (sumando 1 hora o 60 minutos como valor por defecto)
     const fechaFin = new Date(fechaInicio.getTime() + 60 * 60 * 1000);
 
-    // 3. Enviar a Supabase
     const { error } = await supabase
       .from('citas')
       .insert([
@@ -51,14 +50,12 @@ export default function NewAppointmentButton() {
 
     setIsSubmitting(false);
 
-    // 4. Comprobar si hubo error o cerrar modal
     if (error) {
       alert("Hubo un error al guardar: " + error.message);
-      console.error(error);
     } else {
       setOpen(false);
-      alert("¡Cita guardada en la base de datos con éxito!");
-      // Pronto haremos que el calendario se actualice automáticamente aquí
+      // ¡AQUÍ ESTÁ LA MAGIA!: Avisamos al padre que ya puede refrescar
+      onAppointmentCreated(); 
     }
   };
 
