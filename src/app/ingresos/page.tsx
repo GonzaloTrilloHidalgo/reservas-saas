@@ -103,7 +103,7 @@ export default function IngresosPage() {
     <div className="flex min-h-screen bg-slate-50">
       <Sidebar />
       <main className="flex-1 flex flex-col h-screen overflow-y-auto">
-        <header className="h-16 min-h-[64px] border-b border-slate-200 bg-white flex items-center px-8 shrink-0">
+        <header className="h-16 min-h-16 border-b border-slate-200 bg-white flex items-center px-8 shrink-0">
           <h2 className="text-sm font-medium text-slate-500 uppercase tracking-wider">Panel Financiero</h2>
         </header>
 

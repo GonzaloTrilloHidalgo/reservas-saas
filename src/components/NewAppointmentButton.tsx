@@ -23,7 +23,6 @@ interface Profesional {
   nombre: string;
 }
 
-// NUEVA INTERFAZ PARA LOS SERVICIOS
 interface Servicio {
   id: string;
   nombre: string;
@@ -35,24 +34,37 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [profesionales, setProfesionales] = useState<Profesional[]>([]);
-  // NUEVO: Estado para el catálogo de servicios
   const [servicios, setServicios] = useState<Servicio[]>([]);
+  
+  // NUEVO: Estados para guardar el horario comercial dinámico
+  const [horaApertura, setHoraApertura] = useState<number>(9);
+  const [horaCierre, setHoraCierre] = useState<number>(20);
   
   const [tipo, setTipo] = useState<"cita" | "bloqueo">("cita");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  
-  // NUEVO: Estado para controlar el precio y que se actualice dinámicamente
   const [precioActual, setPrecioActual] = useState<number | string>("");
 
   useEffect(() => {
     async function cargarDatos() {
-      // Cargamos el staff
+      // 1. Cargamos el staff
       const { data: profData } = await supabase.from("profesionales").select("id, nombre").order("nombre");
       if (profData) setProfesionales(profData);
 
-      // Cargamos el catálogo de servicios
+      // 2. Cargamos el catálogo de servicios
       const { data: servData } = await supabase.from("servicios").select("id, nombre, precio").order("nombre");
       if (servData) setServicios(servData);
+
+      // 3. NUEVO: Cargamos los horarios desde la tabla de ajustes
+      const { data: ajustesData } = await supabase
+        .from("ajustes")
+        .select("hora_apertura, hora_cierre")
+        .eq("id", 1)
+        .single();
+        
+      if (ajustesData) {
+        setHoraApertura(ajustesData.hora_apertura);
+        setHoraCierre(ajustesData.hora_cierre);
+      }
     }
     cargarDatos();
   }, []);
@@ -68,26 +80,31 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
     const profesionalId = formData.get("professional_id") as string;
     const duracionMinutos = parseInt(formData.get("duration") as string, 10);
 
-    // Nombres dependiendo del tipo
     const nombre = tipo === "cita" ? (formData.get("name") as string) : (formData.get("motivo") as string);
     
     // Obtenemos el nombre del servicio basándonos en el ID seleccionado
     const servicioId = formData.get("servicio_id") as string;
-    // Añadimos .toString() aquí también
-    const servicioSeleccionado = servicios.find(s => s.id.toString() === servicioId);
+    const servicioSeleccionado = tipo === "cita" ? servicios.find(s => s.id.toString() === servicioId) : undefined;
     
+    // Si es bloqueo se guarda el motivo en 'servicio'
+    const nombreServicioFinal = tipo === "cita" ? (servicioSeleccionado?.nombre || "") : "Bloqueo";
+
     const precioRaw = formData.get("precio") as string;
     const precio = tipo === "cita" && precioRaw ? parseFloat(precioRaw) : 0;
 
     const fechaInicio = new Date(`${fecha}T${hora}:00`);
     const fechaFin = new Date(fechaInicio.getTime() + duracionMinutos * 60 * 1000);
 
-    // 1. VALIDACIÓN HORARIO
+    // 1. VALIDACIÓN HORARIO (AHORA ES DINÁMICA)
     const horaInicioFraccion = fechaInicio.getHours() + (fechaInicio.getMinutes() / 60);
     const horaFinFraccion = fechaFin.getHours() + (fechaFin.getMinutes() / 60);
 
-    if (horaInicioFraccion < 9 || horaFinFraccion > 20) {
-      setErrorMsg("El horario seleccionado está fuera del horario comercial. El negocio está abierto de 09:00 a 20:00.");
+    if (horaInicioFraccion < horaApertura || horaFinFraccion > horaCierre) {
+      // Formateamos la hora para que se vea bonita (ej: 09:00 en lugar de 9:00)
+      const aperturaStr = horaApertura.toString().padStart(2, '0');
+      const cierreStr = horaCierre.toString().padStart(2, '0');
+      
+      setErrorMsg(`El horario seleccionado está fuera del horario comercial. El negocio está abierto de ${aperturaStr}:00 a ${cierreStr}:00.`);
       setIsSubmitting(false);
       return;
     }
@@ -113,10 +130,9 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
     }
 
     // 3. GUARDADO
-    // Guardamos el "servicioNombre" como texto para no romper la compatibilidad con el calendario
     const { error } = await supabase.from('citas').insert([{
       cliente_nombre: nombre,
-      servicio: nombre, 
+      servicio: nombreServicioFinal, 
       profesional_id: profesionalId,
       fecha_inicio: fechaInicio.toISOString(),
       fecha_fin: fechaFin.toISOString(),
@@ -129,7 +145,6 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
       setErrorMsg("Hubo un error al guardar: " + error.message);
     } else {
       setOpen(false);
-      // Reseteamos el precio para la próxima cita
       setPrecioActual("");
       onAppointmentCreated();
     }
@@ -139,15 +154,12 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
     setOpen(isOpen);
     if (!isOpen) {
       setTimeout(() => setErrorMsg(null), 200);
-      setPrecioActual(""); // Limpiamos el precio al cerrar
+      setPrecioActual(""); 
     }
   };
 
-  // Función que se ejecuta cuando eligen un servicio del desplegable
   const handleServicioChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    // Añadimos .toString() al id del servicio para que coincida con el texto del select
     const seleccionado = servicios.find(s => s.id.toString() === e.target.value);
-    
     if (seleccionado) {
       setPrecioActual(seleccionado.precio); 
     } else {
@@ -198,7 +210,6 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
                   <Input id="name" name="name" placeholder="Ej. María García" required className="bg-white border-slate-200" />
                 </div>
                 
-                {/* CAMBIAMOS INPUT POR SELECT DE SERVICIOS */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="servicio_id" className="text-slate-700 font-medium">Servicio</Label>
@@ -226,7 +237,7 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
                       step="0.01" 
                       required 
                       value={precioActual}
-                      onChange={(e) => setPrecioActual(e.target.value)} // Permite modificación manual
+                      onChange={(e) => setPrecioActual(e.target.value)}
                       className="bg-white border-slate-200" 
                     />
                   </div>

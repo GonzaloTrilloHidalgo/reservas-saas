@@ -6,7 +6,6 @@ import { format, parse, startOfWeek, getDay, isToday, isSameWeek } from "date-fn
 import { es } from "date-fns/locale";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import { supabase } from "@/lib/supabase"; 
-// Importamos Banknote (Billetes) para los ingresos
 import { CalendarDays, Trophy, Clock, User, Calendar as CalendarIcon, Trash2, Ban, Banknote } from "lucide-react";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -25,7 +24,7 @@ interface CitaCalendario {
   profesional?: string;
   color?: string;
   esBloqueo?: boolean;
-  precio?: number; // Añadimos el precio a la interfaz
+  precio?: number; 
 }
 
 export default function CalendarView() {
@@ -35,6 +34,10 @@ export default function CalendarView() {
   const [activeFilter, setActiveFilter] = useState("Todos");
   const [view, setView] = useState<View>("week");
   const [date, setDate] = useState(new Date()); 
+
+  // ESTADOS DINÁMICOS PARA EL HORARIO
+  const [horaApertura, setHoraApertura] = useState<number>(9);
+  const [horaCierre, setHoraCierre] = useState<number>(20);
 
   const [selectedEvent, setSelectedEvent] = useState<CitaCalendario | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -55,10 +58,23 @@ export default function CalendarView() {
   }, [activeFilter, allEvents]);
 
   const cargarDatosIniciales = async () => {
+    // 1. CARGAMOS LOS AJUSTES DE HORARIO
+    const { data: ajustesData } = await supabase
+      .from("ajustes")
+      .select("hora_apertura, hora_cierre")
+      .eq("id", 1)
+      .single();
+
+    if (ajustesData) {
+      setHoraApertura(ajustesData.hora_apertura);
+      setHoraCierre(ajustesData.hora_cierre);
+    }
+
+    // 2. CARGAMOS PROFESIONALES
     const { data: staffData } = await supabase.from("profesionales").select("nombre");
     if (staffData) setProfesionales(staffData.map(p => p.nombre));
 
-    // AÑADIMOS "precio" A LA CONSULTA DE SUPABASE
+    // 3. CARGAMOS CITAS
     const { data: citasData, error } = await supabase
       .from("citas")
       .select(`id, servicio, cliente_nombre, fecha_inicio, fecha_fin, precio, profesionales (nombre, color)`);
@@ -76,7 +92,7 @@ export default function CalendarView() {
           profesional: cita.profesionales?.nombre || "Sin asignar",
           color: cita.profesionales?.color || "#6366f1",
           esBloqueo: esBloqueo,
-          precio: cita.precio || 0 // Pasamos el precio (o 0 si no hay)
+          precio: cita.precio || 0 
         };
       });
       setAllEvents(citasFormateadas);
@@ -141,13 +157,13 @@ export default function CalendarView() {
     }
   });
 
-  const minTime = new Date(); minTime.setHours(9, 0, 0);
-  const maxTime = new Date(); maxTime.setHours(20, 0, 0);
+  // APLICAMOS LOS LÍMITES DE HORARIO DINÁMICOS
+  const minTime = new Date(); minTime.setHours(horaApertura, 0, 0);
+  const maxTime = new Date(); maxTime.setHours(horaCierre, 0, 0);
 
   return (
     <div className="h-full w-full flex flex-col gap-4 relative">
       
-      {/* 4 COLUMNAS PARA EL DASHBOARD FINANCIERO */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
@@ -210,7 +226,6 @@ export default function CalendarView() {
                     </div>
                   </div>
 
-                  {/* MOSTRAMOS EL PRECIO SOLO SI ES UNA CITA */}
                   {!selectedEvent.esBloqueo && (
                     <div className="flex items-center gap-3 text-slate-700">
                       <div className="bg-emerald-50 p-2 rounded-md text-emerald-600"><Banknote size={20} /></div>
