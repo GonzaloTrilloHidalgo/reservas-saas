@@ -1,26 +1,43 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  
+  /* Colores para Shadcn */
+  --color-sidebar: #ffffff;
+  --color-sidebar-border: #e2e8f0;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root {
+  --background: #ffffff;
+  --foreground: #0f172a; /* Un tono casi negro pero más suave (Slate-900) */
 }
 
+/* Forzamos que el fondo sea siempre blanco por ahora para el Dashboard */
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans); /* Aquí activamos la fuente profesional */
+}
+
+/* Personalización de React Big Calendar */
+.rbc-event {
+  background-color: #4f46e5 !important; /* Color Indigo 600 de Tailwind */
+  border-radius: 6px !important;
+  padding: 2px 5px !important;
+  border: none !important;
+}
+
+.rbc-today {
+  background-color: #f8fafc !important; /* Color Slate 50 de Tailwind */
+}
+
+.rbc-toolbar button:active,
+.rbc-toolbar button.rbc-active {
+  background-color: #e0e7ff !important;
+  color: #4f46e5 !important;
+  border-color: #c7d2fe !important;
 }
