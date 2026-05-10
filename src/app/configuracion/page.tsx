@@ -10,6 +10,9 @@ export default function ConfiguracionPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
+  // NUEVO: Estado para recordar cuál es tu ID real en la tabla de ajustes
+  const [ajustesId, setAjustesId] = useState<number | string | null>(null);
+
   // Estados de los ajustes
   const [nombreNegocio, setNombreNegocio] = useState("");
   const [apertura, setApertura] = useState(9);
@@ -23,10 +26,11 @@ export default function ConfiguracionPage() {
     const { data, error } = await supabase
       .from("ajustes")
       .select("*")
-      .eq("id", 1) // Siempre leemos la primera fila
+      .limit(1) // Cogemos tu única configuración
       .single();
 
     if (data) {
+      setAjustesId(data.id); // <-- Aquí guardamos tu ID secreto
       setNombreNegocio(data.nombre_negocio);
       setApertura(data.hora_apertura);
       setCierre(data.hora_cierre);
@@ -35,6 +39,9 @@ export default function ConfiguracionPage() {
   }
 
   async function guardarAjustes() {
+    // Si por algún motivo no tenemos ID, no hacemos nada para evitar errores
+    if (!ajustesId) return; 
+
     setIsSaving(true);
     const { error } = await supabase
       .from("ajustes")
@@ -43,10 +50,13 @@ export default function ConfiguracionPage() {
         hora_apertura: apertura,
         hora_cierre: cierre,
       })
-      .eq("id", 1);
+      .eq("id", ajustesId); // <-- Ahora actualizamos tu ID específico, no el 1
 
     setIsSaving(false);
-    if (!error) {
+    
+    if (error) {
+      alert("Error al guardar: " + error.message);
+    } else {
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
     }
@@ -86,7 +96,6 @@ export default function ConfiguracionPage() {
 
             <div className="p-8 flex flex-col gap-8">
               
-              {/* SECCIÓN NOMBRE */}
               <div className="flex flex-col gap-3">
                 <div className="flex items-center gap-2 text-slate-700 font-bold text-sm uppercase tracking-wide">
                   <Building2 size={16} /> Nombre del Negocio
@@ -101,7 +110,6 @@ export default function ConfiguracionPage() {
                 <p className="text-xs text-slate-400">Este nombre aparecerá en los reportes y en la interfaz.</p>
               </div>
 
-              {/* SECCIÓN HORARIOS */}
               <div className="flex flex-col gap-4">
                 <div className="flex items-center gap-2 text-slate-700 font-bold text-sm uppercase tracking-wide">
                   <Clock size={16} /> Horario Comercial
@@ -112,7 +120,7 @@ export default function ConfiguracionPage() {
                     <select 
                       value={apertura}
                       onChange={(e) => setApertura(parseInt(e.target.value))}
-                      className="w-full border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                      className="w-full border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-slate-900"
                     >
                       {[...Array(24)].map((_, i) => (
                         <option key={i} value={i}>{i.toString().padStart(2, '0')}:00h</option>
@@ -124,7 +132,7 @@ export default function ConfiguracionPage() {
                     <select 
                       value={cierre}
                       onChange={(e) => setCierre(parseInt(e.target.value))}
-                      className="w-full border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                      className="w-full border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-slate-900"
                     >
                       {[...Array(24)].map((_, i) => (
                         <option key={i} value={i}>{i.toString().padStart(2, '0')}:00h</option>
@@ -132,10 +140,8 @@ export default function ConfiguracionPage() {
                     </select>
                   </div>
                 </div>
-                <p className="text-xs text-slate-400 italic">Nota: Las citas fuera de este rango serán rechazadas automáticamente por el sistema.</p>
               </div>
 
-              {/* BOTÓN GUARDAR */}
               <button 
                 onClick={guardarAjustes}
                 disabled={isSaving}

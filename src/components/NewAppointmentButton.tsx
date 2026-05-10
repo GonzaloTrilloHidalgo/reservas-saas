@@ -58,7 +58,7 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
       const { data: ajustesData } = await supabase
         .from("ajustes")
         .select("hora_apertura, hora_cierre")
-        .eq("id", 1)
+        .limit(1)
         .single();
         
       if (ajustesData) {
