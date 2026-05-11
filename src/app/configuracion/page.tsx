@@ -3,17 +3,16 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import Sidebar from "@/components/Sidebar";
-import { Settings, Clock, Building2, Save, CheckCircle2 } from "lucide-react";
+import { Settings, Clock, Building2, Save, CheckCircle2, AlertCircle } from "lucide-react";
 
 export default function ConfiguracionPage() {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
 
-  // NUEVO: Estado para recordar cuál es tu ID real en la tabla de ajustes
+  // NUEVO ESTADO: Sistema de notificaciones unificado
+  const [toast, setToast] = useState<{ mensaje: string; tipo: "error" | "exito" } | null>(null);
+
   const [ajustesId, setAjustesId] = useState<number | string | null>(null);
-
-  // Estados de los ajustes
   const [nombreNegocio, setNombreNegocio] = useState("");
   const [apertura, setApertura] = useState(9);
   const [cierre, setCierre] = useState(20);
@@ -26,11 +25,11 @@ export default function ConfiguracionPage() {
     const { data, error } = await supabase
       .from("ajustes")
       .select("*")
-      .limit(1) // Cogemos tu única configuración
+      .limit(1)
       .single();
 
     if (data) {
-      setAjustesId(data.id); // <-- Aquí guardamos tu ID secreto
+      setAjustesId(data.id);
       setNombreNegocio(data.nombre_negocio);
       setApertura(data.hora_apertura);
       setCierre(data.hora_cierre);
@@ -38,8 +37,13 @@ export default function ConfiguracionPage() {
     setLoading(false);
   }
 
+  // Función para mostrar la notificación flotante
+  const mostrarNotificacion = (mensaje: string, tipo: "error" | "exito") => {
+    setToast({ mensaje, tipo });
+    setTimeout(() => setToast(null), 3000);
+  };
+
   async function guardarAjustes() {
-    // Si por algún motivo no tenemos ID, no hacemos nada para evitar errores
     if (!ajustesId) return; 
 
     setIsSaving(true);
@@ -50,15 +54,19 @@ export default function ConfiguracionPage() {
         hora_apertura: apertura,
         hora_cierre: cierre,
       })
-      .eq("id", ajustesId); // <-- Ahora actualizamos tu ID específico, no el 1
+      .eq("id", ajustesId);
 
     setIsSaving(false);
     
     if (error) {
-      alert("Error al guardar: " + error.message);
+      // ADIÓS ALERT: Mostramos el error en el Toast rojo
+      mostrarNotificacion("Error al guardar: " + error.message, "error");
     } else {
-      setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 3000);
+      // TRUCO PRO: Actualizamos el caché al instante para que el Sidebar no parpadee
+      localStorage.setItem("velo_nombre_negocio", nombreNegocio);
+      
+      // Mostramos el éxito en el Toast verde
+      mostrarNotificacion("Ajustes guardados con éxito", "exito");
     }
   }
 
@@ -72,12 +80,24 @@ export default function ConfiguracionPage() {
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="flex min-h-screen bg-slate-50 relative">
       <Sidebar />
-      <main className="flex-1 flex flex-col h-screen overflow-y-auto">
+      <main className="flex-1 flex flex-col h-screen overflow-y-auto relative">
         <header className="h-16 border-b border-slate-200 bg-white flex items-center px-8 shrink-0">
           <h2 className="text-sm font-medium text-slate-500 uppercase tracking-wider">Ajustes del Sistema</h2>
         </header>
+
+        {/* NOTIFICACIÓN FLOTANTE (TOAST) */}
+        {toast && (
+          <div className={`fixed bottom-8 right-8 z-50 p-4 rounded-xl shadow-xl border flex items-center gap-3 animate-in slide-in-from-bottom-5 fade-in duration-300 ${
+            toast.tipo === "error" 
+              ? "bg-red-50 text-red-600 border-red-100" 
+              : "bg-emerald-50 text-emerald-600 border-emerald-100"
+          }`}>
+            {toast.tipo === "error" ? <AlertCircle size={20} /> : <CheckCircle2 size={20} />}
+            <span className="font-bold text-sm">{toast.mensaje}</span>
+          </div>
+        )}
 
         <div className="p-8 max-w-2xl mx-auto w-full">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -87,11 +107,6 @@ export default function ConfiguracionPage() {
                 <Settings className="text-indigo-600" size={20} />
                 <h3 className="text-lg font-bold text-slate-800">Preferencias de Velo</h3>
               </div>
-              {showSuccess && (
-                <div className="flex items-center gap-2 text-emerald-600 text-sm font-bold animate-in fade-in slide-in-from-right-4">
-                  <CheckCircle2 size={16} /> Guardado con éxito
-                </div>
-              )}
             </div>
 
             <div className="p-8 flex flex-col gap-8">

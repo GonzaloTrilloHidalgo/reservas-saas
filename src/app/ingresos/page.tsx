@@ -5,7 +5,16 @@ import { supabase } from "@/lib/supabase";
 import Sidebar from "@/components/Sidebar";
 import { format, isSameMonth, isSameYear, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
-import { Banknote, TrendingUp, Users, Calendar as CalendarIcon, Award, FileSpreadsheet } from "lucide-react";
+import { 
+  Banknote, 
+  TrendingUp, 
+  Users, 
+  Calendar as CalendarIcon, 
+  Award, 
+  FileSpreadsheet,
+  AlertCircle,   // <- Nuevo icono para errores
+  CheckCircle2   // <- Nuevo icono para éxito
+} from "lucide-react";
 import * as XLSX from "xlsx";
 
 interface CitaIngreso {
@@ -20,6 +29,9 @@ interface CitaIngreso {
 export default function IngresosPage() {
   const [citas, setCitas] = useState<CitaIngreso[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // NUEVO ESTADO: Controlador de notificaciones flotantes (Toasts)
+  const [toast, setToast] = useState<{ mensaje: string; tipo: "error" | "exito" } | null>(null);
 
   useEffect(() => {
     cargarIngresos();
@@ -45,13 +57,20 @@ export default function IngresosPage() {
     setLoading(false);
   }
 
+  // Función para mostrar notificaciones que desaparecen solas
+  const mostrarNotificacion = (mensaje: string, tipo: "error" | "exito") => {
+    setToast({ mensaje, tipo });
+    setTimeout(() => setToast(null), 3000);
+  };
+
   const exportarMesActual = () => {
     const citasFiltradas = citas.filter((cita) => 
       isSameMonth(parseISO(cita.fecha_inicio), new Date())
     );
 
     if (citasFiltradas.length === 0) {
-      alert("No hay citas este mes para exportar.");
+      // notificación elegante
+      mostrarNotificacion("No hay citas este mes para exportar.", "error");
       return;
     }
 
@@ -72,6 +91,9 @@ export default function IngresosPage() {
 
     const nombreArchivo = `Facturacion_${format(new Date(), "MMMM_yyyy", { locale: es })}.xlsx`;
     XLSX.writeFile(workbook, nombreArchivo);
+    
+    // AVISO DE ÉXITO AL DESCARGAR
+    mostrarNotificacion("Archivo Excel descargado correctamente.", "exito");
   };
 
   const hoy = new Date();
@@ -100,18 +122,30 @@ export default function IngresosPage() {
     .sort((a, b) => b.total - a.total); 
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="flex min-h-screen bg-slate-50 relative">
       <Sidebar />
-      <main className="flex-1 flex flex-col h-screen overflow-y-auto">
+      <main className="flex-1 flex flex-col h-screen overflow-y-auto relative">
         <header className="h-16 min-h-16 border-b border-slate-200 bg-white flex items-center px-8 shrink-0">
           <h2 className="text-sm font-medium text-slate-500 uppercase tracking-wider">Panel Financiero</h2>
         </header>
+
+        {/* NOTIFICACIÓN FLOTANTE (TOAST) */}
+        {toast && (
+          <div className={`fixed bottom-8 right-8 z-50 p-4 rounded-xl shadow-xl border flex items-center gap-3 animate-in slide-in-from-bottom-5 fade-in duration-300 ${
+            toast.tipo === "error" 
+              ? "bg-red-50 text-red-600 border-red-100" 
+              : "bg-emerald-50 text-emerald-600 border-emerald-100"
+          }`}>
+            {toast.tipo === "error" ? <AlertCircle size={20} /> : <CheckCircle2 size={20} />}
+            <span className="font-bold text-sm">{toast.mensaje}</span>
+          </div>
+        )}
 
         <div className="p-8 max-w-6xl mx-auto w-full flex flex-col gap-6">
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             
-            {/* TARJETA FACTURACIÓN MES (CON BOTÓN EXCEL) */}
+            {/* TARJETA FACTURACIÓN MES */}
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between relative group overflow-hidden">
               <div className="flex items-center gap-5">
                 <div className="bg-emerald-50 p-4 rounded-xl text-emerald-600">
@@ -123,7 +157,6 @@ export default function IngresosPage() {
                 </div>
               </div>
               
-              {/* BOTÓN EXCEL INTEGRADO */}
               <button 
                 onClick={exportarMesActual}
                 title="Exportar este mes a Excel"
@@ -158,7 +191,6 @@ export default function IngresosPage() {
             </div>
           </div>
 
-          {/* ... Resto de la página (Ranking y Cierre) ... */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-8">
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col">
               <div className="p-6 border-b border-slate-100 flex items-center gap-3">

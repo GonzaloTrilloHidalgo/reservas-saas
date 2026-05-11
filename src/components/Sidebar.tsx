@@ -10,7 +10,8 @@ import {
   Tags, 
   Banknote, 
   Settings,
-  LogOut 
+  LogOut,
+  Contact
 } from "lucide-react"; 
 import Link from "next/link"; 
 import { usePathname, useRouter } from "next/navigation"; 
@@ -48,6 +49,7 @@ export default function Sidebar() {
 
   const menuItems = [
     { icon: LayoutDashboard, label: "Agenda", href: "/" },
+    { icon: Contact, label: "Clientes", href: "/clientes" },
     { icon: Users, label: "Profesionales", href: "/staff" },
     { icon: Tags, label: "Servicios", href: "/servicios" },
     { icon: Banknote, label: "Finanzas", href: "/ingresos" },

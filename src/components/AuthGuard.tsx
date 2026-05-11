@@ -35,10 +35,13 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
       if (event === "SIGNED_OUT") {
         router.push("/login");
       } else if (event === "SIGNED_IN" && pathname === "/login") {
-        router.push("/");
+        // NUEVO: Solo redirigimos si NO estamos en medio de un registro
+        if (!sessionStorage.getItem("is_registering")) {
+          router.push("/");
+        }
       }
     });
-
+    
     return () => {
       authListener.subscription.unsubscribe();
     };
