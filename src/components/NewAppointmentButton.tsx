@@ -61,7 +61,6 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
   const sugerenciasRef = useRef<HTMLDivElement>(null);
   const prefijosRef = useRef<HTMLDivElement>(null);
 
-  // FUNCIÓN PARA LIMPIAR EL FORMULARIO (LA CLAVE)
   const resetForm = () => {
     setClienteNombre("");
     setClienteTelefono("");
@@ -72,15 +71,11 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
     setHoraSeleccionada(null);
     setErrorMsg(null);
     setTipo("cita");
-    // Opcional: resetear la fecha a hoy
     setFecha(new Date().toISOString().split("T")[0]);
   };
 
-  // EFECTO PARA LIMPIAR CUANDO SE CIERRA EL DIALOG
   useEffect(() => {
-    if (!open) {
-      resetForm();
-    }
+    if (!open) resetForm();
   }, [open]);
 
   useEffect(() => {
@@ -103,15 +98,6 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
       calcularHuecosDisponibles();
     }
   }, [open, fecha, profesionalId, duracionMinutos, tipo]);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (sugerenciasRef.current && !sugerenciasRef.current.contains(event.target as Node)) setMostrarSugerencias(false);
-      if (prefijosRef.current && !prefijosRef.current.contains(event.target as Node)) setMostrarPrefijos(false);
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   async function calcularHuecosDisponibles() {
     setCargandoHuecos(true);
@@ -217,28 +203,28 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
         </button>
       </DialogTrigger>
 
-      <DialogContent className="sm:max-w-3xl bg-white p-0 overflow-visible border-none shadow-2xl">
-        <div className="flex flex-col md:flex-row h-full max-h-[90vh]">
+      <DialogContent className="sm:max-w-3xl bg-white p-0 border-none shadow-2xl overflow-hidden flex flex-col h-[95vh] sm:h-auto">
+        <DialogHeader className="p-6 border-b border-slate-100 shrink-0">
+          <DialogTitle className="text-2xl font-black text-slate-800">Agendar Cita</DialogTitle>
+        </DialogHeader>
+
+        <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
           
           {/* PANEL IZQUIERDO: FORMULARIO */}
-          <div className="flex-1 p-8 border-r border-slate-100 overflow-y-auto">
-            <DialogHeader className="mb-6">
-              <DialogTitle className="text-2xl font-black text-slate-800">Agendar Cita</DialogTitle>
-            </DialogHeader>
-
-            <div className="flex bg-slate-100 p-1 rounded-xl mb-8 w-fit">
+          <div className="flex-1 p-6 md:p-8 border-r border-slate-100 overflow-y-auto bg-white">
+            <div className="flex bg-slate-100 p-1 rounded-xl mb-6 w-fit">
               <button type="button" onClick={() => setTipo("cita")} className={`px-6 py-2 text-xs font-bold rounded-lg transition-all ${tipo === "cita" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500"}`}>Cliente</button>
               <button type="button" onClick={() => setTipo("bloqueo")} className={`px-6 py-2 text-xs font-bold rounded-lg transition-all ${tipo === "bloqueo" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500"}`}>Bloqueo</button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form className="space-y-6 pb-4">
               {tipo === "cita" && (
                 <>
                   <div className="space-y-2 relative" ref={sugerenciasRef}>
                     <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest">Nombre del Cliente</Label>
                     <div className="relative">
                       <User className="absolute left-4 top-3.5 text-slate-400" size={18} />
-                      <Input value={clienteNombre} onChange={(e) => {setClienteNombre(e.target.value); setMostrarSugerencias(true);}} className="h-12 pl-12 rounded-xl border-slate-200 focus:ring-indigo-500" placeholder="Ej. Juan Pérez" />
+                      <Input value={clienteNombre} onChange={(e) => {setClienteNombre(e.target.value); setMostrarSugerencias(true);}} className="h-12 pl-12 rounded-xl border-slate-200" placeholder="Ej. Juan Pérez" />
                     </div>
                     {mostrarSugerencias && cliFiltrados.length > 0 && (
                       <div className="absolute z-50 w-full mt-1 bg-white border border-slate-100 rounded-xl shadow-xl max-h-40 overflow-y-auto">
@@ -250,17 +236,17 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest">Teléfono de Contacto</Label>
+                    <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest">Teléfono</Label>
                     <div className="flex gap-2">
                       <div className="relative" ref={prefijosRef}>
-                        <button type="button" onClick={() => setMostrarPrefijos(!mostrarPrefijos)} className="h-12 px-4 border border-slate-200 rounded-xl flex items-center gap-2 bg-slate-50 hover:bg-slate-100 transition-colors text-sm font-bold text-slate-700">
-                          <img src={`https://flagcdn.com/w20/${infoP.iso}.png`} className="w-5 rounded-sm" /> {clientePrefijo}
+                        <button type="button" onClick={() => setMostrarPrefijos(!mostrarPrefijos)} className="h-12 px-3 border border-slate-200 rounded-xl flex items-center gap-2 bg-slate-50 text-sm font-bold">
+                          <img src={`https://flagcdn.com/w20/${infoP.iso}.png`} className="w-5 rounded-sm" alt="flag" /> {clientePrefijo}
                         </button>
                         {mostrarPrefijos && (
-                          <div className="absolute top-14 left-0 z-50 w-48 bg-white border border-slate-100 rounded-xl shadow-xl max-h-48 overflow-y-auto p-1">
+                          <div className="absolute top-14 left-0 z-[60] w-48 bg-white border border-slate-100 rounded-xl shadow-xl max-h-48 overflow-y-auto p-1">
                             {PREFIJOS.map(p => (
                               <button key={p.iso} type="button" onClick={() => {setClientePrefijo(p.code); setMostrarPrefijos(false);}} className="w-full flex items-center gap-3 px-3 py-2 hover:bg-slate-50 rounded-lg text-xs font-bold text-slate-600">
-                                <img src={`https://flagcdn.com/w20/${p.iso}.png`} className="w-4" /> {p.country} ({p.code})
+                                <img src={`https://flagcdn.com/w20/${p.iso}.png`} className="w-4" alt={p.country} /> {p.country}
                               </button>
                             ))}
                           </div>
@@ -276,7 +262,7 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest">Servicio</Label>
-                      <select value={servicioId} onChange={(e) => {setServicioId(e.target.value); setPrecioActual(servicios.find(s=>s.id == e.target.value)?.precio || "")}} className="w-full h-12 border border-slate-200 rounded-xl px-4 text-sm font-medium bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+                      <select value={servicioId} onChange={(e) => {setServicioId(e.target.value); setPrecioActual(servicios.find(s=>s.id == e.target.value)?.precio || "")}} className="w-full h-12 border border-slate-200 rounded-xl px-4 text-sm font-medium bg-white outline-none">
                         <option value="">Seleccionar...</option>
                         {servicios.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
                       </select>
@@ -315,13 +301,13 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
           </div>
 
           {/* PANEL DERECHO: SELECTOR DE HORAS */}
-          <div className="w-full md:w-[320px] bg-slate-50 p-8 flex flex-col">
+          <div className="w-full md:w-[320px] bg-slate-50 p-6 md:p-8 flex flex-col shrink-0">
             <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest mb-4 flex justify-between items-center">
               Horas Disponibles
               {cargandoHuecos && <div className="animate-spin h-3 w-3 border-2 border-indigo-600 border-t-transparent rounded-full" />}
             </Label>
             
-            <div className="grid grid-cols-3 gap-2 overflow-y-auto pr-2 mb-6 scrollbar-hide">
+            <div className="grid grid-cols-4 md:grid-cols-3 gap-2 overflow-y-auto mb-6 max-h-[180px] md:max-h-none scrollbar-hide">
               {huecosDisponibles.map((slot) => (
                 <button
                   key={slot.hora}
@@ -332,7 +318,7 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
                     ${slot.ocupado 
                       ? "bg-slate-200/50 text-slate-400 border-transparent opacity-50 cursor-not-allowed" 
                       : horaSeleccionada === slot.hora
-                        ? "bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-200 scale-[1.02]"
+                        ? "bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-200"
                         : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600 shadow-sm"
                     }
                   `}
@@ -342,12 +328,12 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
               ))}
             </div>
 
-            <div className="mt-auto pt-4 border-t border-slate-200">
+            <div className="mt-auto md:mt-4 pt-4 border-t border-slate-200">
               {errorMsg && <p className="text-[10px] text-red-500 font-bold mb-3 text-center">{errorMsg}</p>}
               <Button 
                 onClick={handleSubmit} 
                 disabled={isSubmitting || !horaSeleccionada} 
-                className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl shadow-xl shadow-indigo-100 transition-all active:scale-95 disabled:bg-slate-300 disabled:shadow-none"
+                className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl shadow-xl shadow-indigo-100 transition-all active:scale-95 disabled:bg-slate-300"
               >
                 {isSubmitting ? "Procesando..." : "Confirmar Cita"}
               </Button>
