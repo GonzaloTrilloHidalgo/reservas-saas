@@ -53,7 +53,7 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
   const [huecosDisponibles, setHuecosDisponibles] = useState<{ hora: string; ocupado: boolean; motivo?: string }[]>([]);
   const [cargandoHuecos, setCargandoHuecos] = useState(false);
 
-  // NUEVOS ESTADOS DE CONFIGURACIÓN
+  // ESTADOS DE CONFIGURACIÓN
   const [horaApertura, setHoraApertura] = useState(9);
   const [horaCierre, setHoraCierre] = useState(20);
   const [inicioDescanso, setInicioDescanso] = useState(14);
@@ -107,7 +107,8 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
   // COMPROBAR SI EL DÍA SELECCIONADO ES FESTIVO
   useEffect(() => {
     async function comprobarCierre() {
-      const { data, error } = await supabase
+      if (!fecha) return;
+      const { data } = await supabase
         .from("cierres_negocio")
         .select("motivo")
         .eq("fecha", fecha)
@@ -253,17 +254,19 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
         </button>
       </DialogTrigger>
 
-      <DialogContent className="sm:max-w-4xl bg-white p-0 border-none shadow-2xl overflow-hidden flex flex-col h-[95vh] sm:h-[85vh]">
+      {/* AJUSTE RESPONSIVE: En móvil el h-[90vh] con overflow-auto permite scroll global. En escritorio, altura fija y scroll interno. */}
+      <DialogContent className="w-[95vw] max-w-md sm:max-w-4xl bg-white p-0 border-none shadow-2xl overflow-hidden flex flex-col h-[90vh] sm:h-[85vh] rounded-3xl">
         
-        <DialogHeader className="p-6 border-b border-slate-100 shrink-0 bg-white z-10">
-          <DialogTitle className="text-2xl font-black text-slate-800">Agendar Cita</DialogTitle>
+        <DialogHeader className="p-5 sm:p-6 border-b border-slate-100 shrink-0 bg-white z-10 sticky top-0">
+          <DialogTitle className="text-xl sm:text-2xl font-black text-slate-800">Agendar Cita</DialogTitle>
         </DialogHeader>
 
-        <div className="flex flex-col md:flex-row flex-1 overflow-hidden relative bg-white">
+        {/* AJUSTE RESPONSIVE: En móvil flex-col normal (uno debajo de otro). En ordenador flex-row (dos columnas). */}
+        <div className="flex flex-col md:flex-row flex-1 overflow-y-auto md:overflow-hidden relative bg-white">
           
           {/* PANEL IZQUIERDO: FORMULARIO */}
-          <div className="flex-1 p-6 md:p-8 overflow-y-auto w-full relative z-0">
-            <div className="flex bg-slate-100 p-1 rounded-xl mb-6 w-fit">
+          <div className="flex-1 p-5 md:p-8 w-full relative z-0 md:overflow-y-auto shrink-0">
+            <div className="flex bg-slate-100 p-1 rounded-xl mb-6 w-fit mx-auto md:mx-0">
               <button type="button" onClick={() => setTipo("cita")} className={`px-6 py-2 text-xs font-bold rounded-lg transition-all ${tipo === "cita" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500"}`}>Cliente</button>
               <button type="button" onClick={() => setTipo("bloqueo")} className={`px-6 py-2 text-xs font-bold rounded-lg transition-all ${tipo === "bloqueo" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500"}`}>Bloqueo</button>
             </div>
@@ -277,7 +280,7 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
               </div>
             )}
 
-            <form className="space-y-6 pb-4">
+            <form className="space-y-5 pb-4">
               {tipo === "cita" && (
                 <>
                   <div className="space-y-2 relative" ref={sugerenciasRef}>
@@ -350,7 +353,7 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
                 </div>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-2 pb-4 md:pb-0">
                 <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest">Fecha</Label>
                 <div className="relative">
                   <CalendarIcon className="absolute left-4 top-3.5 text-slate-400" size={18} />
@@ -361,15 +364,17 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
           </div>
 
           {/* PANEL DERECHO: SELECTOR DE HORAS */}
-          <div className="w-full md:w-[340px] bg-slate-50 flex flex-col shrink-0 border-t md:border-t-0 md:border-l border-slate-200">
-            <div className="p-6 md:p-8 flex-1 flex flex-col overflow-hidden">
+          {/* AJUSTE RESPONSIVE: En móvil ya no está anclado a la derecha, fluye hacia abajo. Se le quita la altura fija. */}
+          <div className="w-full md:w-[340px] bg-slate-50 flex flex-col shrink-0 md:border-l border-slate-200 border-t md:border-t-0">
+            <div className="p-5 md:p-8 flex-1 flex flex-col md:overflow-hidden h-full">
               
               <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest mb-4 flex justify-between items-center shrink-0">
                 Horas Disponibles
                 {cargandoHuecos && <div className="animate-spin h-3 w-3 border-2 border-indigo-600 border-t-transparent rounded-full" />}
               </Label>
               
-              <div className="grid grid-cols-4 md:grid-cols-3 gap-2 overflow-y-auto flex-1 content-start scrollbar-hide pr-1">
+              {/* AJUSTE RESPONSIVE: En móvil el scroll se funde con el de la página. En escritorio sí tiene scroll vertical independiente. */}
+              <div className="grid grid-cols-4 md:grid-cols-3 gap-2 flex-1 content-start md:overflow-y-auto md:pr-1 scrollbar-hide mb-6 md:mb-0">
                 {huecosDisponibles.map((slot) => (
                   <button
                     key={slot.hora}
@@ -391,7 +396,7 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
                 ))}
               </div>
 
-              <div className="mt-6 pt-4 border-t border-slate-200 shrink-0">
+              <div className="mt-auto pt-4 border-t border-slate-200 shrink-0 bg-slate-50 sticky bottom-0 z-10 md:static pb-2 md:pb-0">
                 {errorMsg && <p className="text-[10px] text-red-500 font-bold mb-3 text-center">{errorMsg}</p>}
                 <Button 
                   onClick={handleSubmit} 
