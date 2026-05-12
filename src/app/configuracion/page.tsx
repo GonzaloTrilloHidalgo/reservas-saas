@@ -112,8 +112,7 @@ export default function ConfiguracionPage() {
           </div>
         )}
 
-        {/* AJUSTE RESPONSIVE: p-4 en móvil, p-8 en escritorio */}
-        <div className="p-4 md:p-8 max-w-4xl mx-auto w-full space-y-6 md:space-y-8 pb-24">
+        <div className="p-4 md:p-8 max-w-4xl mx-auto w-full space-y-6 md:space-y-8 pb-24 overflow-x-hidden">
           
           {/* SECCIÓN 1: HORARIOS Y NEGOCIO */}
           <section className="bg-white rounded-2xl md:rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
@@ -126,17 +125,17 @@ export default function ConfiguracionPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Building2 size={14}/> Nombre Comercial</label>
-                  <input value={nombreNegocio} onChange={(e) => setNombreNegocio(e.target.value)} className="w-full border border-slate-200 p-3.5 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-slate-700 transition-all" />
+                  <input value={nombreNegocio} onChange={(e) => setNombreNegocio(e.target.value)} className="w-full border border-slate-200 p-3.5 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-slate-700 transition-all block min-w-0" />
                 </div>
 
                 <div className="space-y-2">
                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Clock size={14}/> Jornada Laboral</label>
                    <div className="flex items-center gap-2 w-full">
-                      <select value={apertura} onChange={(e) => setApertura(Number(e.target.value))} className="flex-1 border border-slate-200 p-3.5 rounded-xl bg-slate-50 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500">
+                      <select value={apertura} onChange={(e) => setApertura(Number(e.target.value))} className="flex-1 border border-slate-200 p-3.5 rounded-xl bg-slate-50 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 min-w-0">
                         {[...Array(24)].map((_, i) => <option key={i} value={i}>{i.toString().padStart(2, '0')}:00h</option>)}
                       </select>
-                      <span className="text-slate-400 font-bold text-xs uppercase">a</span>
-                      <select value={cierre} onChange={(e) => setCierre(Number(e.target.value))} className="flex-1 border border-slate-200 p-3.5 rounded-xl bg-slate-50 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500">
+                      <span className="text-slate-400 font-bold text-xs uppercase shrink-0">a</span>
+                      <select value={cierre} onChange={(e) => setCierre(Number(e.target.value))} className="flex-1 border border-slate-200 p-3.5 rounded-xl bg-slate-50 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 min-w-0">
                         {[...Array(24)].map((_, i) => <option key={i} value={i}>{i.toString().padStart(2, '0')}:00h</option>)}
                       </select>
                    </div>
@@ -151,13 +150,13 @@ export default function ConfiguracionPage() {
                 <div className="grid grid-cols-2 gap-3 md:gap-6">
                   <div>
                     <label className="text-[10px] font-bold text-indigo-400 uppercase block mb-1.5">Inicio Descanso</label>
-                    <select value={inicioDescanso} onChange={(e) => setInicioDescanso(Number(e.target.value))} className="w-full border-none p-3.5 rounded-xl bg-white shadow-sm font-bold text-indigo-900 outline-none focus:ring-2 focus:ring-indigo-500">
+                    <select value={inicioDescanso} onChange={(e) => setInicioDescanso(Number(e.target.value))} className="w-full border-none p-3.5 rounded-xl bg-white shadow-sm font-bold text-indigo-900 outline-none focus:ring-2 focus:ring-indigo-500 min-w-0">
                       {[...Array(24)].map((_, i) => <option key={i} value={i}>{i.toString().padStart(2, '0')}:00h</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="text-[10px] font-bold text-indigo-400 uppercase block mb-1.5">Fin Descanso</label>
-                    <select value={finDescanso} onChange={(e) => setFinDescanso(Number(e.target.value))} className="w-full border-none p-3.5 rounded-xl bg-white shadow-sm font-bold text-indigo-900 outline-none focus:ring-2 focus:ring-indigo-500">
+                    <select value={finDescanso} onChange={(e) => setFinDescanso(Number(e.target.value))} className="w-full border-none p-3.5 rounded-xl bg-white shadow-sm font-bold text-indigo-900 outline-none focus:ring-2 focus:ring-indigo-500 min-w-0">
                       {[...Array(24)].map((_, i) => <option key={i} value={i}>{i.toString().padStart(2, '0')}:00h</option>)}
                     </select>
                   </div>
@@ -181,17 +180,32 @@ export default function ConfiguracionPage() {
             </div>
             
             <div className="p-4 md:p-8 space-y-6">
-              {/* AJUSTE RESPONSIVE: En móvil el formulario fluye hacia abajo, en PC se alinea al final */}
-              <div className="flex flex-col md:flex-row gap-4 items-start md:items-end bg-red-50/30 p-4 md:p-5 rounded-2xl border border-red-100">
-                <div className="w-full md:flex-1 space-y-2">
-                  <label className="text-[10px] font-black text-red-500 uppercase tracking-widest">Fecha</label>
-                  <input type="date" value={nuevaFechaCierre} onChange={(e) => setNuevaFechaCierre(e.target.value)} className="w-full p-3.5 rounded-xl border border-red-100 outline-none focus:ring-2 focus:ring-red-400 font-bold text-red-900" />
+              
+              {/* AQUÍ SE HA APLICADO EL PARCHE PARA IPHONE */}
+              <div className="flex flex-col md:flex-row gap-4 items-start md:items-end bg-red-50/30 p-4 md:p-5 rounded-2xl border border-red-100 w-full">
+                
+                <div className="w-full md:flex-1 space-y-2 min-w-0">
+                  <label className="text-[10px] font-black text-red-500 uppercase tracking-widest block">Fecha</label>
+                  <input 
+                    type="date" 
+                    value={nuevaFechaCierre} 
+                    onChange={(e) => setNuevaFechaCierre(e.target.value)} 
+                    className="w-full block min-w-0 appearance-none bg-white p-3.5 rounded-xl border border-red-100 outline-none focus:ring-2 focus:ring-red-400 font-bold text-red-900" 
+                  />
                 </div>
-                <div className="w-full md:flex-1 space-y-2">
-                  <label className="text-[10px] font-black text-red-500 uppercase tracking-widest">Motivo del cierre</label>
-                  <input type="text" value={nuevoMotivo} onChange={(e) => setNuevoMotivo(e.target.value)} placeholder="Ej. Festivo Nacional" className="w-full p-3.5 rounded-xl border border-red-100 outline-none focus:ring-2 focus:ring-red-400 font-bold text-red-900 placeholder:text-red-200" />
+                
+                <div className="w-full md:flex-1 space-y-2 min-w-0">
+                  <label className="text-[10px] font-black text-red-500 uppercase tracking-widest block">Motivo del cierre</label>
+                  <input 
+                    type="text" 
+                    value={nuevoMotivo} 
+                    onChange={(e) => setNuevoMotivo(e.target.value)} 
+                    placeholder="Ej. Festivo Nacional" 
+                    className="w-full block min-w-0 appearance-none bg-white p-3.5 rounded-xl border border-red-100 outline-none focus:ring-2 focus:ring-red-400 font-bold text-red-900 placeholder:text-red-200" 
+                  />
                 </div>
-                <button onClick={añadirFestivo} className="w-full md:w-auto flex justify-center bg-red-500 hover:bg-red-600 text-white p-4 rounded-xl transition-all shadow-lg shadow-red-200 active:scale-95 mt-2 md:mt-0">
+
+                <button onClick={añadirFestivo} className="w-full md:w-auto shrink-0 flex justify-center bg-red-500 hover:bg-red-600 text-white p-3.5 rounded-xl transition-all shadow-lg shadow-red-200 active:scale-95 mt-2 md:mt-0">
                   <Plus size={20} /> <span className="md:hidden font-bold ml-2">Añadir Día</span>
                 </button>
               </div>
