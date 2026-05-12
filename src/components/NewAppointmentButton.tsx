@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Plus, AlertCircle, User, Phone, ChevronDown, CalendarIcon, Clock, Check, Search } from "lucide-react";
+import { Plus, AlertCircle, User, Phone, ChevronDown, CalendarIcon, Clock, Check, Search, Coffee, Ban } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import {
   Dialog,
@@ -50,11 +50,17 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
   const [servicioId, setServicioId] = useState("");
   const [precioActual, setPrecioActual] = useState<number | string>("");
 
-  const [huecosDisponibles, setHuecosDisponibles] = useState<{ hora: string; ocupado: boolean }[]>([]);
+  const [huecosDisponibles, setHuecosDisponibles] = useState<{ hora: string; ocupado: boolean; motivo?: string }[]>([]);
   const [cargandoHuecos, setCargandoHuecos] = useState(false);
 
+  // NUEVOS ESTADOS DE CONFIGURACIÓN
   const [horaApertura, setHoraApertura] = useState(9);
   const [horaCierre, setHoraCierre] = useState(20);
+  const [inicioDescanso, setInicioDescanso] = useState(14);
+  const [finDescanso, setFinDescanso] = useState(15);
+  const [esDiaCerrado, setEsDiaCerrado] = useState(false);
+  const [motivoCierre, setMotivoCierre] = useState("");
+
   const [tipo, setTipo] = useState<"cita" | "bloqueo">("cita");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -79,25 +85,51 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
   }, [open]);
 
   useEffect(() => {
-    async function cargarDatos() {
+    async function cargarDatosBase() {
       const { data: p } = await supabase.from("profesionales").select("id, nombre").is("fecha_borrado", null).order("nombre");
       const { data: s } = await supabase.from("servicios").select("id, nombre, precio").is("fecha_borrado", null).order("nombre");
       const { data: c } = await supabase.from("clientes").select("id, nombre, telefono").is("fecha_borrado", null).order("nombre");
-      const { data: a } = await supabase.from("ajustes").select("hora_apertura, hora_cierre").single();
+      const { data: a } = await supabase.from("ajustes").select("*").single();
       
       if (p) { setProfesionales(p); setProfesionalId(p[0]?.id || ""); }
       if (s) setServicios(s);
       if (c) setClientesCRM(c);
-      if (a) { setHoraApertura(a.hora_apertura); setHoraCierre(a.hora_cierre); }
+      if (a) { 
+        setHoraApertura(a.hora_apertura); 
+        setHoraCierre(a.hora_cierre); 
+        setInicioDescanso(a.hora_inicio_descanso);
+        setFinDescanso(a.hora_fin_descanso);
+      }
     }
-    cargarDatos();
+    cargarDatosBase();
   }, []);
+
+  // COMPROBAR SI EL DÍA SELECCIONADO ES FESTIVO
+  useEffect(() => {
+    async function comprobarCierre() {
+      const { data, error } = await supabase
+        .from("cierres_negocio")
+        .select("motivo")
+        .eq("fecha", fecha)
+        .is("fecha_borrado", null)
+        .maybeSingle();
+
+      if (data) {
+        setEsDiaCerrado(true);
+        setMotivoCierre(data.motivo || "Cierre Total");
+      } else {
+        setEsDiaCerrado(false);
+        setMotivoCierre("");
+      }
+    }
+    if (open) comprobarCierre();
+  }, [fecha, open]);
 
   useEffect(() => {
     if (open && fecha && profesionalId && duracionMinutos) {
       calcularHuecosDisponibles();
     }
-  }, [open, fecha, profesionalId, duracionMinutos, tipo]);
+  }, [open, fecha, profesionalId, duracionMinutos, tipo, esDiaCerrado]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -119,6 +151,7 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
       .from("citas")
       .select("fecha_inicio, fecha_fin")
       .eq("profesional_id", profesionalId)
+      .is("deleted_at", null)
       .gte("fecha_inicio", inicioDia)
       .lte("fecha_inicio", finDia);
 
@@ -130,7 +163,15 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
         const finCita = new Date(inicioCita.getTime() + duracionMinutos * 60000);
 
         const horaFinFraccion = finCita.getHours() + (finCita.getMinutes() / 60);
-        let ocupado = horaFinFraccion > (horaCierre + 0.01);
+        
+        // LÓGICA DE BLOQUEO
+        const esDescanso = h >= inicioDescanso && h < finDescanso;
+        
+        let ocupado = esDiaCerrado || esDescanso || horaFinFraccion > (horaCierre + 0.01);
+        let motivo = "";
+        
+        if (esDiaCerrado) motivo = "FESTIVO";
+        else if (esDescanso) motivo = "DESCANSO";
 
         if (!ocupado && citasExistentes) {
           ocupado = citasExistentes.some(cita => {
@@ -139,7 +180,7 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
             return (inicioCita < exFin && finCita > exInicio);
           });
         }
-        slots.push({ hora: horaHito, ocupado });
+        slots.push({ hora: horaHito, ocupado, motivo });
       }
     }
     setHuecosDisponibles(slots);
@@ -212,14 +253,12 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
         </button>
       </DialogTrigger>
 
-      {/* AQUÍ ESTÁ LA MAGIA RESPONSIVE: h-[95vh] para móvil, sm:h-[85vh] para escritorio, sm:max-w-4xl */}
       <DialogContent className="sm:max-w-4xl bg-white p-0 border-none shadow-2xl overflow-hidden flex flex-col h-[95vh] sm:h-[85vh]">
         
         <DialogHeader className="p-6 border-b border-slate-100 shrink-0 bg-white z-10">
           <DialogTitle className="text-2xl font-black text-slate-800">Agendar Cita</DialogTitle>
         </DialogHeader>
 
-        {/* CONTENEDOR FLEX: Columna en móvil, Fila en ordenador */}
         <div className="flex flex-col md:flex-row flex-1 overflow-hidden relative bg-white">
           
           {/* PANEL IZQUIERDO: FORMULARIO */}
@@ -228,6 +267,15 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
               <button type="button" onClick={() => setTipo("cita")} className={`px-6 py-2 text-xs font-bold rounded-lg transition-all ${tipo === "cita" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500"}`}>Cliente</button>
               <button type="button" onClick={() => setTipo("bloqueo")} className={`px-6 py-2 text-xs font-bold rounded-lg transition-all ${tipo === "bloqueo" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500"}`}>Bloqueo</button>
             </div>
+
+            {esDiaCerrado && (
+              <div className="bg-red-50 border border-red-100 p-4 rounded-2xl mb-6 flex items-center gap-3 text-red-600 animate-in fade-in zoom-in-95">
+                <Ban size={20} />
+                <div className="text-xs font-bold uppercase tracking-tight">
+                  Día Cerrado: <span className="font-black underline">{motivoCierre}</span>
+                </div>
+              </div>
+            )}
 
             <form className="space-y-6 pb-4">
               {tipo === "cita" && (
@@ -312,7 +360,7 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
             </form>
           </div>
 
-          {/* PANEL DERECHO: SELECTOR DE HORAS (Ancho fijo en escritorio) */}
+          {/* PANEL DERECHO: SELECTOR DE HORAS */}
           <div className="w-full md:w-[340px] bg-slate-50 flex flex-col shrink-0 border-t md:border-t-0 md:border-l border-slate-200">
             <div className="p-6 md:p-8 flex-1 flex flex-col overflow-hidden">
               
@@ -321,7 +369,6 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
                 {cargandoHuecos && <div className="animate-spin h-3 w-3 border-2 border-indigo-600 border-t-transparent rounded-full" />}
               </Label>
               
-              {/* Cuadrícula de horas con su propio scroll independiente */}
               <div className="grid grid-cols-4 md:grid-cols-3 gap-2 overflow-y-auto flex-1 content-start scrollbar-hide pr-1">
                 {huecosDisponibles.map((slot) => (
                   <button
@@ -329,7 +376,7 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
                     disabled={slot.ocupado}
                     onClick={() => setHoraSeleccionada(slot.hora)}
                     className={`
-                      py-3 rounded-xl text-xs font-bold transition-all border
+                      relative py-3 rounded-xl text-xs font-bold transition-all border flex flex-col items-center justify-center gap-0.5
                       ${slot.ocupado 
                         ? "bg-slate-200/50 text-slate-400 border-transparent opacity-50 cursor-not-allowed" 
                         : horaSeleccionada === slot.hora
@@ -339,19 +386,19 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
                     `}
                   >
                     {slot.hora}
+                    {slot.motivo && <span className="text-[8px] font-black opacity-60 leading-none">{slot.motivo}</span>}
                   </button>
                 ))}
               </div>
 
-              {/* Contenedor del botón de confirmación, siempre visible abajo */}
               <div className="mt-6 pt-4 border-t border-slate-200 shrink-0">
                 {errorMsg && <p className="text-[10px] text-red-500 font-bold mb-3 text-center">{errorMsg}</p>}
                 <Button 
                   onClick={handleSubmit} 
-                  disabled={isSubmitting || !horaSeleccionada} 
+                  disabled={isSubmitting || !horaSeleccionada || esDiaCerrado} 
                   className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl shadow-xl shadow-indigo-100 transition-all active:scale-95 disabled:bg-slate-300 disabled:shadow-none"
                 >
-                  {isSubmitting ? "Procesando..." : "Confirmar Cita"}
+                  {isSubmitting ? "Procesando..." : esDiaCerrado ? "CERRADO" : "Confirmar Cita"}
                 </Button>
               </div>
 

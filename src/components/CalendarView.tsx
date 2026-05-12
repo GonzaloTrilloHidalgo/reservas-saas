@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 const locales = { es: es };
 const localizer = dateFnsLocalizer({ format, parse, startOfWeek, getDay, locales });
 
-// INTERFAZ
+// INTERFAZ UNIFICADA
 interface CitaCalendario {
   id: string;
   title: string;
@@ -29,6 +29,8 @@ interface CitaCalendario {
   telefono?: string;
   cliente_nombre?: string;
   servicio?: string;
+  isBackground?: boolean;
+  isFestivo?: boolean;
 }
 
 // COMPONENTE: HEADER PERSONALIZADO DEL CALENDARIO
@@ -52,7 +54,6 @@ const CustomToolbar = (toolbar: any) => {
 
       <h2 className="text-xl md:text-2xl font-black text-slate-800 flex items-center gap-2 capitalize">
         <CalendarDays className="text-indigo-600" size={24} />
-        {/* AQUÍ ESTÁ LA MAGIA: Usamos el label automático de la librería */}
         {toolbar.label}
       </h2>
 
@@ -77,7 +78,9 @@ const CustomToolbar = (toolbar: any) => {
 
 export default function CalendarView() {
   const [allEvents, setAllEvents] = useState<CitaCalendario[]>([]);
+  const [backgroundEvents, setBackgroundEvents] = useState<CitaCalendario[]>([]);
   const [filteredEvents, setFilteredEvents] = useState<CitaCalendario[]>([]);
+  
   const [profesionales, setProfesionales] = useState<string[]>([]);
   const [activeFilter, setActiveFilter] = useState("Todos");
   const [view, setView] = useState<View>("week");
@@ -105,16 +108,28 @@ export default function CalendarView() {
   }, [activeFilter, allEvents]);
 
   const cargarDatosIniciales = async () => {
-    const { data: ajustesData } = await supabase.from("ajustes").select("hora_apertura, hora_cierre").limit(1).single();
-    if (ajustesData) { setHoraApertura(ajustesData.hora_apertura); setHoraCierre(ajustesData.hora_cierre); }
+    // 1. Cargar Ajustes
+    const { data: ajustesData } = await supabase.from("ajustes").select("*").limit(1).single();
+    let apertura = 9, cierre = 20, iniDescanso = 14, finDescanso = 15;
+    
+    if (ajustesData) { 
+      apertura = ajustesData.hora_apertura; 
+      cierre = ajustesData.hora_cierre;
+      iniDescanso = ajustesData.hora_inicio_descanso;
+      finDescanso = ajustesData.hora_fin_descanso;
+      setHoraApertura(apertura); 
+      setHoraCierre(cierre); 
+    }
 
+    // 2. Cargar Profesionales
     const { data: staffData } = await supabase.from("profesionales").select("nombre").is("fecha_borrado", null).order("nombre");
     if (staffData) setProfesionales(staffData.map(p => p.nombre));
 
+    // 3. Cargar Citas
     const { data: citasData, error } = await supabase
       .from("citas")
       .select(`id, servicio, cliente_nombre, fecha_inicio, fecha_fin, precio, profesionales (nombre, color), clientes (telefono)`)
-      .is("fecha_borrado", null);
+      .is("fecha_borrado", null); // Borrado lógico
     
     if (error) return console.error("Error al cargar:", error.message);
 
@@ -137,6 +152,42 @@ export default function CalendarView() {
       });
       setAllEvents(citasFormateadas);
     }
+
+    // 4. Cargar Festivos y generar Eventos de Fondo
+    const { data: festivosData } = await supabase
+      .from("cierres_negocio")
+      .select("*")
+      .is("fecha_borrado", null);
+
+    const generadorFondos: CitaCalendario[] = [];
+
+    const hoy = new Date();
+    for (let i = -30; i < 60; i++) {
+      const diaAct = new Date(hoy);
+      diaAct.setDate(hoy.getDate() + i);
+      const diaString = diaAct.toISOString().split("T")[0];
+
+      const festivoEncontrado = festivosData?.find(f => f.fecha === diaString);
+
+      if (festivoEncontrado) {
+        const start = new Date(diaAct); start.setHours(apertura, 0, 0);
+        const end = new Date(diaAct); end.setHours(cierre, 0, 0);
+        generadorFondos.push({ 
+          id: `bg-fest-${diaString}`, 
+          title: festivoEncontrado.motivo || "FESTIVO", 
+          start, end, isBackground: true, isFestivo: true 
+        });
+      } else {
+        const start = new Date(diaAct); start.setHours(iniDescanso, 0, 0);
+        const end = new Date(diaAct); end.setHours(finDescanso, 0, 0);
+        generadorFondos.push({ 
+          id: `bg-desc-${diaString}`, 
+          title: "DESCANSO", 
+          start, end, isBackground: true, isFestivo: false 
+        });
+      }
+    }
+    setBackgroundEvents(generadorFondos);
   };
 
   const handleSelectEvent = (eventoSeleccionado: CitaCalendario) => {
@@ -148,7 +199,12 @@ export default function CalendarView() {
   const handleDeleteConfirm = async () => {
     if (!selectedEvent) return;
     setIsDeleting(true);
-    const { error } = await supabase.from("citas").delete().eq("id", selectedEvent.id);
+    // BORRADO LÓGICO
+    const { error } = await supabase
+      .from("citas")
+      .update({ fecha_borrado: new Date().toISOString() })
+      .eq("id", selectedEvent.id);
+    
     setIsDeleting(false);
     if (!error) {
       setAllEvents(prev => prev.filter(e => e.id !== selectedEvent.id));
@@ -166,6 +222,25 @@ export default function CalendarView() {
   };
 
   const eventPropGetter = (event: CitaCalendario) => {
+    // ESTILO PARA EVENTOS DE FONDO (Descansos y Festivos)
+    if (event.isBackground) {
+      return {
+        style: {
+          backgroundColor: event.isFestivo ? "rgba(239, 68, 68, 0.08)" : "rgba(99, 102, 241, 0.08)",
+          color: event.isFestivo ? "#ef4444" : "#6366f1",
+          border: "none",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontWeight: "900",
+          fontSize: "11px",
+          pointerEvents: "none" as "none",
+          textTransform: "uppercase" as "uppercase",
+        }
+      };
+    }
+
+    // ESTILO PARA CITAS NORMALES O BLOQUEOS
     const bgColor = event.esBloqueo ? "#94a3b8" : (event.color || "#6366f1");
     return {
       style: {
@@ -182,6 +257,18 @@ export default function CalendarView() {
       },
       className: "transition-all hover:brightness-110",
     };
+  };
+
+  const dayPropGetter = (date: Date) => {
+    const day = date.getDay();
+    if (day === 0 || day === 6) { 
+      return {
+        style: {
+          backgroundColor: '#f8fafc',
+        }
+      };
+    }
+    return {};
   };
 
   const citasReales = allEvents.filter(c => !c.esBloqueo);
@@ -241,7 +328,10 @@ export default function CalendarView() {
         <Calendar
           localizer={localizer} 
           events={filteredEvents} 
+          backgroundEvents={backgroundEvents}
+          dayLayoutAlgorithm="no-overlap"
           eventPropGetter={eventPropGetter} 
+          dayPropGetter={dayPropGetter} 
           startAccessor="start" 
           endAccessor="end" 
           culture="es"
@@ -253,13 +343,13 @@ export default function CalendarView() {
           min={minTime} 
           max={maxTime} 
           components={{
-            toolbar: CustomToolbar // <-- AQUÍ INYECTAMOS LA CABECERA MODERNA
+            toolbar: CustomToolbar
           }}
           style={{ height: "100%", border: "none" }}
         />
       </div>
 
-      {/* MODAL DETALLES... (se mantiene igual, ya está modernizado) */}
+      {/* MODAL DETALLES */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="sm:max-w-md bg-white border border-slate-200 shadow-2xl rounded-3xl p-0 overflow-hidden">
           <DialogHeader className="p-6 border-b border-slate-100 bg-slate-50/50">

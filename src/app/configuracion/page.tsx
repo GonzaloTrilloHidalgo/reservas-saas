@@ -3,171 +3,214 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import Sidebar from "@/components/Sidebar";
-import { Settings, Clock, Building2, Save, CheckCircle2, AlertCircle } from "lucide-react";
+import { 
+  Settings, Clock, Building2, Save, CheckCircle2, 
+  AlertCircle, Coffee, CalendarOff, Trash2, Plus 
+} from "lucide-react";
 
 export default function ConfiguracionPage() {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-
-  // NUEVO ESTADO: Sistema de notificaciones unificado
   const [toast, setToast] = useState<{ mensaje: string; tipo: "error" | "exito" } | null>(null);
 
+  // Estados de Ajustes Generales
   const [ajustesId, setAjustesId] = useState<number | string | null>(null);
   const [nombreNegocio, setNombreNegocio] = useState("");
   const [apertura, setApertura] = useState(9);
   const [cierre, setCierre] = useState(20);
+  const [inicioDescanso, setInicioDescanso] = useState(14);
+  const [finDescanso, setFinDescanso] = useState(15);
+
+  // Estados de Festivos
+  const [festivos, setFestivos] = useState<any[]>([]);
+  const [nuevaFechaCierre, setNuevaFechaCierre] = useState("");
+  const [nuevoMotivo, setNuevoMotivo] = useState("");
 
   useEffect(() => {
-    cargarAjustes();
+    cargarDatos();
   }, []);
 
-  async function cargarAjustes() {
-    const { data, error } = await supabase
-      .from("ajustes")
+  async function cargarDatos() {
+    // 1. Cargar Ajustes
+    const { data: adj } = await supabase.from("ajustes").select("*").limit(1).single();
+    if (adj) {
+      setAjustesId(adj.id);
+      setNombreNegocio(adj.nombre_negocio);
+      setApertura(adj.hora_apertura);
+      setCierre(adj.hora_cierre);
+      setInicioDescanso(adj.hora_inicio_descanso || 14);
+      setFinDescanso(adj.hora_fin_descanso || 15);
+    }
+
+    // 2. Cargar Festivos activos
+    const { data: fes } = await supabase
+      .from("cierres_negocio")
       .select("*")
       .is("fecha_borrado", null)
-      .limit(1)
-      .single();
+      .order("fecha", { ascending: true });
+    if (fes) setFestivos(fes);
 
-    if (data) {
-      setAjustesId(data.id);
-      setNombreNegocio(data.nombre_negocio);
-      setApertura(data.hora_apertura);
-      setCierre(data.hora_cierre);
-    }
     setLoading(false);
   }
 
-  // Función para mostrar la notificación flotante
   const mostrarNotificacion = (mensaje: string, tipo: "error" | "exito") => {
     setToast({ mensaje, tipo });
     setTimeout(() => setToast(null), 3000);
   };
 
   async function guardarAjustes() {
-    if (!ajustesId) return; 
-
+    if (!ajustesId) return;
     setIsSaving(true);
-    const { error } = await supabase
-      .from("ajustes")
-      .update({
-        nombre_negocio: nombreNegocio,
-        hora_apertura: apertura,
-        hora_cierre: cierre,
-      })
-      .eq("id", ajustesId);
+    const { error } = await supabase.from("ajustes").update({
+      nombre_negocio: nombreNegocio,
+      hora_apertura: apertura,
+      hora_cierre: cierre,
+      hora_inicio_descanso: inicioDescanso,
+      hora_fin_descanso: finDescanso,
+    }).eq("id", ajustesId);
 
     setIsSaving(false);
-    
-    if (error) {
-      // ADIÓS ALERT: Mostramos el error en el Toast rojo
-      mostrarNotificacion("Error al guardar: " + error.message, "error");
-    } else {
-      // TRUCO PRO: Actualizamos el caché al instante para que el Sidebar no parpadee
-      localStorage.setItem("velo_nombre_negocio", nombreNegocio);
-      
-      // Mostramos el éxito en el Toast verde
-      mostrarNotificacion("Ajustes guardados con éxito", "exito");
+    if (error) mostrarNotificacion("Error: " + error.message, "error");
+    else mostrarNotificacion("Ajustes guardados correctamente", "exito");
+  }
+
+  async function añadirFestivo() {
+    if (!nuevaFechaCierre) return;
+    const { error } = await supabase.from("cierres_negocio").insert([
+      { fecha: nuevaFechaCierre, motivo: nuevoMotivo }
+    ]);
+    if (error) mostrarNotificacion(error.message, "error");
+    else {
+      setNuevaFechaCierre(""); setNuevoMotivo("");
+      cargarDatos();
+      mostrarNotificacion("Día de cierre añadido", "exito");
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex min-h-screen bg-slate-50">
-        <Sidebar />
-        <div className="flex-1 flex items-center justify-center text-slate-400">Cargando configuración...</div>
-      </div>
-    );
+  async function eliminarFestivo(id: string) {
+    const { error } = await supabase
+      .from("cierres_negocio")
+      .update({ fecha_borrado: new Date().toISOString() })
+      .eq("id", id);
+    if (!error) cargarDatos();
   }
+
+  if (loading) return <div className="flex min-h-screen bg-slate-50"><Sidebar /><div className="flex-1 flex items-center justify-center">Cargando...</div></div>;
 
   return (
     <div className="flex min-h-screen bg-slate-50 relative">
       <Sidebar />
       <main className="flex-1 flex flex-col h-screen overflow-y-auto relative">
         <header className="h-16 border-b border-slate-200 bg-white flex items-center px-8 shrink-0">
-          <h2 className="text-sm font-medium text-slate-500 uppercase tracking-wider">Ajustes del Sistema</h2>
+          <h2 className="text-sm font-bold text-slate-800 uppercase tracking-widest">Configuración General</h2>
         </header>
 
-        {/* NOTIFICACIÓN FLOTANTE (TOAST) */}
         {toast && (
-          <div className={`fixed bottom-8 right-8 z-50 p-4 rounded-xl shadow-xl border flex items-center gap-3 animate-in slide-in-from-bottom-5 fade-in duration-300 ${
-            toast.tipo === "error" 
-              ? "bg-red-50 text-red-600 border-red-100" 
-              : "bg-emerald-50 text-emerald-600 border-emerald-100"
-          }`}>
+          <div className={`fixed bottom-8 right-8 z-50 p-4 rounded-xl shadow-xl border flex items-center gap-3 animate-in slide-in-from-bottom-5 ${toast.tipo === "error" ? "bg-red-50 text-red-600 border-red-100" : "bg-emerald-50 text-emerald-600 border-emerald-100"}`}>
             {toast.tipo === "error" ? <AlertCircle size={20} /> : <CheckCircle2 size={20} />}
             <span className="font-bold text-sm">{toast.mensaje}</span>
           </div>
         )}
 
-        <div className="p-8 max-w-2xl mx-auto w-full">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-              <div className="flex items-center gap-3">
-                <Settings className="text-indigo-600" size={20} />
-                <h3 className="text-lg font-bold text-slate-800">Preferencias de Velo</h3>
-              </div>
+        <div className="p-8 max-w-4xl mx-auto w-full space-y-8 pb-20">
+          
+          {/* SECCIÓN 1: HORARIOS Y NEGOCIO */}
+          <section className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
+              <Settings className="text-indigo-600" size={20} />
+              <h3 className="font-black text-slate-800 uppercase text-xs tracking-widest">Ajustes del Establecimiento</h3>
             </div>
-
-            <div className="p-8 flex flex-col gap-8">
-              
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center gap-2 text-slate-700 font-bold text-sm uppercase tracking-wide">
-                  <Building2 size={16} /> Nombre del Negocio
+            
+            <div className="p-8 space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Building2 size={14}/> Nombre Comercial</label>
+                  <input value={nombreNegocio} onChange={(e) => setNombreNegocio(e.target.value)} className="w-full border border-slate-200 p-3.5 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-slate-700 transition-all" />
                 </div>
-                <input 
-                  type="text"
-                  value={nombreNegocio}
-                  onChange={(e) => setNombreNegocio(e.target.value)}
-                  className="w-full border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-slate-900"
-                  placeholder="Ej. Clínica Dental Velo"
-                />
-                <p className="text-xs text-slate-400">Este nombre aparecerá en los reportes y en la interfaz.</p>
+
+                <div className="space-y-2">
+                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Clock size={14}/> Jornada Laboral</label>
+                   <div className="flex items-center gap-2">
+                      <select value={apertura} onChange={(e) => setApertura(Number(e.target.value))} className="flex-1 border border-slate-200 p-3.5 rounded-xl bg-slate-50 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500">
+                        {[...Array(24)].map((_, i) => <option key={i} value={i}>{i.toString().padStart(2, '0')}:00h</option>)}
+                      </select>
+                      <span className="text-slate-400 font-bold text-xs uppercase">a</span>
+                      <select value={cierre} onChange={(e) => setCierre(Number(e.target.value))} className="flex-1 border border-slate-200 p-3.5 rounded-xl bg-slate-50 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500">
+                        {[...Array(24)].map((_, i) => <option key={i} value={i}>{i.toString().padStart(2, '0')}:00h</option>)}
+                      </select>
+                   </div>
+                </div>
               </div>
 
-              <div className="flex flex-col gap-4">
-                <div className="flex items-center gap-2 text-slate-700 font-bold text-sm uppercase tracking-wide">
-                  <Clock size={16} /> Horario Comercial
+              {/* BLOQUE DE DESCANSO */}
+              <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100 space-y-4">
+                <div className="flex items-center gap-2 text-indigo-700 font-black text-[10px] uppercase tracking-widest">
+                  <Coffee size={16} /> Horario de Descanso / Cierre Temporal
                 </div>
                 <div className="grid grid-cols-2 gap-6">
                   <div>
-                    <label className="text-xs text-slate-500 mb-1.5 block">Hora de Apertura</label>
-                    <select 
-                      value={apertura}
-                      onChange={(e) => setApertura(parseInt(e.target.value))}
-                      className="w-full border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-slate-900"
-                    >
-                      {[...Array(24)].map((_, i) => (
-                        <option key={i} value={i}>{i.toString().padStart(2, '0')}:00h</option>
-                      ))}
+                    <label className="text-[10px] font-bold text-indigo-400 uppercase block mb-1.5">Inicio Descanso</label>
+                    <select value={inicioDescanso} onChange={(e) => setInicioDescanso(Number(e.target.value))} className="w-full border-none p-3.5 rounded-xl bg-white shadow-sm font-bold text-indigo-900 outline-none focus:ring-2 focus:ring-indigo-500">
+                      {[...Array(24)].map((_, i) => <option key={i} value={i}>{i.toString().padStart(2, '0')}:00h</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="text-xs text-slate-500 mb-1.5 block">Hora de Cierre</label>
-                    <select 
-                      value={cierre}
-                      onChange={(e) => setCierre(parseInt(e.target.value))}
-                      className="w-full border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-slate-900"
-                    >
-                      {[...Array(24)].map((_, i) => (
-                        <option key={i} value={i}>{i.toString().padStart(2, '0')}:00h</option>
-                      ))}
+                    <label className="text-[10px] font-bold text-indigo-400 uppercase block mb-1.5">Fin Descanso</label>
+                    <select value={finDescanso} onChange={(e) => setFinDescanso(Number(e.target.value))} className="w-full border-none p-3.5 rounded-xl bg-white shadow-sm font-bold text-indigo-900 outline-none focus:ring-2 focus:ring-indigo-500">
+                      {[...Array(24)].map((_, i) => <option key={i} value={i}>{i.toString().padStart(2, '0')}:00h</option>)}
                     </select>
                   </div>
                 </div>
+                <p className="text-[11px] text-indigo-400 font-medium leading-relaxed italic">
+                  Las horas comprendidas en este rango no estarán disponibles para reservar citas en la web pública.
+                </p>
               </div>
 
-              <button 
-                onClick={guardarAjustes}
-                disabled={isSaving}
-                className="mt-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-3 transition-all shadow-lg shadow-indigo-200"
-              >
-                {isSaving ? "Guardando..." : <><Save size={20} /> Guardar Cambios</>}
+              <button onClick={guardarAjustes} disabled={isSaving} className="w-full bg-slate-900 hover:bg-black text-white font-black py-4 rounded-2xl flex items-center justify-center gap-3 transition-all shadow-xl shadow-slate-200 active:scale-[0.98]">
+                {isSaving ? "Guardando..." : <><Save size={20} /> Guardar Preferencias</>}
               </button>
-
             </div>
-          </div>
+          </section>
+
+          {/* SECCIÓN 2: FESTIVOS Y CIERRES */}
+          <section className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
+              <CalendarOff className="text-red-500" size={20} />
+              <h3 className="font-black text-slate-800 uppercase text-xs tracking-widest">Días de Cierre Totales</h3>
+            </div>
+            
+            <div className="p-8 space-y-6">
+              <div className="flex flex-col md:flex-row gap-4 items-end bg-red-50/30 p-5 rounded-2xl border border-red-100">
+                <div className="flex-1 w-full space-y-2">
+                  <label className="text-[10px] font-black text-red-500 uppercase tracking-widest">Fecha</label>
+                  <input type="date" value={nuevaFechaCierre} onChange={(e) => setNuevaFechaCierre(e.target.value)} className="w-full p-3.5 rounded-xl border border-red-100 outline-none focus:ring-2 focus:ring-red-400 font-bold text-red-900" />
+                </div>
+                <div className="flex-1 w-full space-y-2">
+                  <label className="text-[10px] font-black text-red-500 uppercase tracking-widest">Motivo del cierre</label>
+                  <input type="text" value={nuevoMotivo} onChange={(e) => setNuevoMotivo(e.target.value)} placeholder="Ej. Festivo Nacional" className="w-full p-3.5 rounded-xl border border-red-100 outline-none focus:ring-2 focus:ring-red-400 font-bold text-red-900 placeholder:text-red-200" />
+                </div>
+                <button onClick={añadirFestivo} className="bg-red-500 hover:bg-red-600 text-white p-4 rounded-xl transition-all shadow-lg shadow-red-200 active:scale-90"><Plus size={20} /></button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {festivos.length === 0 ? (
+                  <div className="col-span-full py-10 text-center border-2 border-dashed border-slate-100 rounded-3xl">
+                    <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">No hay cierres programados</p>
+                  </div>
+                ) : (
+                  festivos.map((f) => (
+                    <div key={f.id} className="flex justify-between items-center p-5 bg-white border border-slate-100 rounded-2xl group hover:border-red-200 transition-all shadow-sm">
+                      <div>
+                        <p className="font-black text-slate-800">{new Date(f.fecha).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                        <p className="text-[10px] text-red-400 uppercase font-black tracking-tighter">{f.motivo || 'Cierre Total'}</p>
+                      </div>
+                      <button onClick={() => eliminarFestivo(f.id)} className="text-slate-200 hover:text-red-500 p-2 transition-colors rounded-lg hover:bg-red-50"><Trash2 size={18} /></button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </section>
         </div>
       </main>
     </div>

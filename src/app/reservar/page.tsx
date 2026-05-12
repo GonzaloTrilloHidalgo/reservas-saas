@@ -6,7 +6,7 @@ import { es } from "date-fns/locale";
 import { supabase } from "@/lib/supabase";
 import { 
   Scissors, CalendarDays, Clock, User, Phone, 
-  ChevronRight, ArrowLeft, CheckCircle2 
+  ChevronRight, ArrowLeft, CheckCircle2, Ban 
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,6 +32,8 @@ export default function PaginaReservaPublica() {
   const [profesionales, setProfesionales] = useState<any[]>([]);
   const [horaApertura, setHoraApertura] = useState(9);
   const [horaCierre, setHoraCierre] = useState(20);
+  const [inicioDescanso, setInicioDescanso] = useState(14);
+  const [finDescanso, setFinDescanso] = useState(15);
 
   // SELECCIONES DEL CLIENTE
   const [servicioSeleccionado, setServicioSeleccionado] = useState<any>(null);
@@ -46,12 +48,15 @@ export default function PaginaReservaPublica() {
   const [mostrarPrefijos, setMostrarPrefijos] = useState(false);
   const prefijosRef = useRef<HTMLDivElement>(null);
   
-  // NUEVOS ESTADOS PARA AUTOCOMPLETAR
+  // NUEVOS ESTADOS PARA AUTOCOMPLETAR Y FESTIVOS
   const [telefonoVerificado, setTelefonoVerificado] = useState(false);
   const [buscandoCliente, setBuscandoCliente] = useState(false);
   const [clienteConocido, setClienteConocido] = useState(false);
+  const [esDiaCerrado, setEsDiaCerrado] = useState(false);
+  const [motivoCierre, setMotivoCierre] = useState("");
+
   // ESTADO DE DISPONIBILIDAD
-  const [huecosDisponibles, setHuecosDisponibles] = useState<{ hora: string; ocupado: boolean }[]>([]);
+  const [huecosDisponibles, setHuecosDisponibles] = useState<{ hora: string; ocupado: boolean; motivo?: string }[]>([]);
   const [cargandoHuecos, setCargandoHuecos] = useState(false);
 
   // CERRAR DROPDOWN AL HACER CLICK FUERA
@@ -70,11 +75,16 @@ export default function PaginaReservaPublica() {
     async function cargarDatos() {
       const { data: s } = await supabase.from("servicios").select("*").is("fecha_borrado", null).order("nombre");
       const { data: p } = await supabase.from("profesionales").select("*").is("fecha_borrado", null).order("nombre");
-      const { data: a } = await supabase.from("ajustes").select("hora_apertura, hora_cierre").single();
+      const { data: a } = await supabase.from("ajustes").select("*").single();
       
       if (s) setServicios(s);
       if (p) setProfesionales(p);
-      if (a) { setHoraApertura(a.hora_apertura); setHoraCierre(a.hora_cierre); }
+      if (a) { 
+        setHoraApertura(a.hora_apertura); 
+        setHoraCierre(a.hora_cierre); 
+        setInicioDescanso(a.hora_inicio_descanso || 14);
+        setFinDescanso(a.hora_fin_descanso || 15);
+      }
       
       // Poner la fecha de hoy por defecto (formato YYYY-MM-DD)
       setFecha(new Date().toISOString().split("T")[0]);
@@ -82,12 +92,34 @@ export default function PaginaReservaPublica() {
     cargarDatos();
   }, []);
 
+  // COMPROBAR FESTIVOS CADA VEZ QUE CAMBIA LA FECHA
+  useEffect(() => {
+    async function comprobarCierre() {
+      if (!fecha) return;
+      const { data } = await supabase
+        .from("cierres_negocio")
+        .select("motivo")
+        .eq("fecha", fecha)
+        .is("fecha_borrado", null)
+        .maybeSingle();
+
+      if (data) {
+        setEsDiaCerrado(true);
+        setMotivoCierre(data.motivo || "Cierre Total");
+      } else {
+        setEsDiaCerrado(false);
+        setMotivoCierre("");
+      }
+    }
+    comprobarCierre();
+  }, [fecha]);
+
   // RECALCULAR HUECOS CUANDO CAMBIA LA FECHA O EL PROFESIONAL
   useEffect(() => {
     if (fecha && profesionalSeleccionado && servicioSeleccionado) {
       calcularHuecos();
     }
-  }, [fecha, profesionalSeleccionado, servicioSeleccionado]);
+  }, [fecha, profesionalSeleccionado, servicioSeleccionado, esDiaCerrado]);
 
   const calcularHuecos = async () => {
     setCargandoHuecos(true);
@@ -110,7 +142,7 @@ export default function PaginaReservaPublica() {
     const esHoy = fecha === ahora.toISOString().split("T")[0];
 
     for (let h = horaApertura; h < horaCierre; h++) {
-      for (let m of ["00", "30"]) { // Intervalos de 30 mins para cliente público
+      for (let m of ["00", "30"]) { // Intervalos de 30 mins
         const horaHito = `${String(h).padStart(2, "0")}:${m}`;
         const inicioCita = new Date(`${fecha}T${horaHito}:00`);
         const finCita = new Date(inicioCita.getTime() + duracion * 60000);
@@ -118,15 +150,23 @@ export default function PaginaReservaPublica() {
         // Si es hoy, ocultamos las horas que ya han pasado
         if (esHoy && inicioCita < ahora) continue;
 
-        let ocupado = false;
-        if (citasExistentes) {
+        const horaFinFraccion = finCita.getHours() + (finCita.getMinutes() / 60);
+        const esDescanso = h >= inicioDescanso && h < finDescanso;
+
+        let ocupado = esDiaCerrado || esDescanso || horaFinFraccion > (horaCierre + 0.01);
+        let motivo = "";
+        
+        if (esDiaCerrado) motivo = "FESTIVO";
+        else if (esDescanso) motivo = "DESCANSO";
+
+        if (!ocupado && citasExistentes) {
           ocupado = citasExistentes.some(cita => {
             const exInicio = new Date(cita.fecha_inicio);
             const exFin = new Date(cita.fecha_fin);
             return (inicioCita < exFin && finCita > exInicio);
           });
         }
-        slots.push({ hora: horaHito, ocupado });
+        slots.push({ hora: horaHito, ocupado, motivo });
       }
     }
     setHuecosDisponibles(slots);
@@ -147,11 +187,9 @@ export default function PaginaReservaPublica() {
         .eq("telefono", telFinal);
 
       if (data && data.length > 0) {
-        // ¡Cliente encontrado!
         setNombre(data[0].nombre);
         setClienteConocido(true);
       } else {
-        // Cliente nuevo
         setNombre("");
         setClienteConocido(false);
       }
@@ -159,7 +197,7 @@ export default function PaginaReservaPublica() {
       setTelefonoVerificado(true);
     } catch (error) {
       console.error("Error al verificar teléfono", error);
-      setTelefonoVerificado(true); // Le dejamos pasar de todas formas si hay fallo de red
+      setTelefonoVerificado(true); 
     } finally {
       setBuscandoCliente(false);
     }
@@ -173,54 +211,40 @@ export default function PaginaReservaPublica() {
       const telFinal = `${prefijo}${telefono.replace(/\s+/g, "")}`;
       let clienteId = null;
 
-      console.log("1. Buscando teléfono:", telFinal);
-
-      // 1. Buscar si el cliente ya existe
       const { data: clientesExistentes, error: errorBusqueda } = await supabase
         .from("clientes")
-        .select("id, telefono") // Pedimos también el teléfono para verlo
+        .select("id, telefono, nombre")
         .is("fecha_borrado", null)
         .eq("telefono", telFinal);
 
-      console.log("2. Resultado búsqueda:", { clientesExistentes, errorBusqueda });
+      if (errorBusqueda) throw errorBusqueda;
 
-      if (errorBusqueda) {
-        console.error("Error al buscar cliente:", errorBusqueda);
-        throw errorBusqueda;
-      }
-
-      // 2. Si el cliente YA EXISTE, cogemos su ID. Si NO EXISTE, lo creamos.
       if (clientesExistentes && clientesExistentes.length > 0) {
         clienteId = clientesExistentes[0].id;
-        console.log("3a. Cliente encontrado. ID:", clienteId);
+        
+        if (clientesExistentes[0].nombre !== nombre.trim()) {
+          await supabase
+            .from("clientes")
+            .update({ nombre: nombre.trim() })
+            .eq("id", clienteId);
+        }
       } else {
-        console.log("3b. Cliente no encontrado. Procediendo a crear...");
         const { data: nuevoCliente, error: errorCreacion } = await supabase
           .from("clientes")
           .insert([{ nombre: nombre.trim(), telefono: telFinal }])
           .select("id"); 
 
-        console.log("4. Resultado creación:", { nuevoCliente, errorCreacion });
-
-        if (errorCreacion) {
-          console.error("Error FATAL al crear cliente:", errorCreacion);
-          throw errorCreacion;
-        }
-        
+        if (errorCreacion) throw errorCreacion;
         if (nuevoCliente && nuevoCliente.length > 0) {
           clienteId = nuevoCliente[0].id;
-          console.log("5. Cliente creado con éxito. ID:", clienteId);
         }
       }
 
       if (!clienteId) throw new Error("No se pudo obtener ni crear el ID del cliente.");
 
-      // 3. Crear la Cita
       const duracionFinal = servicioSeleccionado.duracion || 60;
       const start = new Date(`${fecha}T${horaSeleccionada}:00`).toISOString();
       const end = new Date(new Date(start).getTime() + duracionFinal * 60000).toISOString();
-
-      console.log("6. Insertando cita para el cliente:", clienteId);
 
       const { error: errorCita } = await supabase.from("citas").insert([{
         cliente_nombre: nombre.trim(),
@@ -232,12 +256,8 @@ export default function PaginaReservaPublica() {
         precio: servicioSeleccionado.precio || 0
       }]);
 
-      if (errorCita) {
-        console.error("Error al insertar cita:", errorCita);
-        throw errorCita;
-      }
+      if (errorCita) throw errorCita;
 
-      console.log("7. ¡Reserva completada con éxito!");
       setStep(4); 
     } catch (error) {
       console.error("Error GENERAL en confirmarReserva:", error);
@@ -247,7 +267,6 @@ export default function PaginaReservaPublica() {
     }
   };
 
-  // RENDERIZADO DE PASOS
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-3xl shadow-xl shadow-slate-200/50 overflow-hidden flex flex-col">
@@ -264,7 +283,6 @@ export default function PaginaReservaPublica() {
             <p className="text-indigo-100 text-sm font-medium">
               Paso {step} de 3: {step === 1 ? "Servicio" : step === 2 ? "Fecha y Hora" : "Tus Datos"}
             </p>
-            {/* Barra de progreso */}
             <div className="absolute bottom-0 left-0 h-1 bg-white/20 w-full">
               <div className="h-full bg-emerald-400 transition-all duration-500" style={{ width: `${(step / 3) * 100}%` }} />
             </div>
@@ -272,6 +290,7 @@ export default function PaginaReservaPublica() {
         )}
 
         <div className="p-6 flex-1 overflow-y-auto">
+          
           {/* PASO 1: SELECCIONAR SERVICIO Y PROFESIONAL */}
           {step === 1 && (
             <div className="space-y-6 animate-in slide-in-from-right-4">
@@ -288,8 +307,13 @@ export default function PaginaReservaPublica() {
                           : "border-slate-100 hover:border-indigo-200"
                       }`}
                     >
-                      <span className="font-bold text-slate-800">{s.nombre}</span>
-                      <span className="font-black text-indigo-600">{s.precio}€</span>
+                      <div>
+                        <span className="font-bold text-slate-800 block">{s.nombre}</span>
+                        <span className="text-xs font-medium text-slate-500 flex items-center gap-1 mt-1">
+                          <Clock size={12} /> {s.duracion || 60} min
+                        </span>
+                      </div>
+                      <span className="font-black text-indigo-600 text-lg">{s.precio}€</span>
                     </button>
                   ))}
                 </div>
@@ -352,7 +376,13 @@ export default function PaginaReservaPublica() {
                   {cargandoHuecos && <div className="animate-spin h-4 w-4 border-2 border-indigo-600 border-t-transparent rounded-full" />}
                 </h3>
                 
-                {huecosDisponibles.length === 0 && !cargandoHuecos ? (
+                {esDiaCerrado ? (
+                  <div className="bg-red-50 text-red-600 p-6 rounded-2xl text-center flex flex-col items-center gap-2 border border-red-100 animate-in zoom-in-95">
+                    <Ban size={32} className="opacity-80" />
+                    <p className="font-black text-lg">Día Cerrado</p>
+                    <p className="text-sm font-medium">{motivoCierre}</p>
+                  </div>
+                ) : huecosDisponibles.length === 0 && !cargandoHuecos ? (
                   <div className="bg-amber-50 text-amber-700 p-4 rounded-xl text-sm font-bold text-center">
                     No hay citas disponibles para este día. Prueba con otra fecha.
                   </div>
@@ -363,7 +393,8 @@ export default function PaginaReservaPublica() {
                         key={slot.hora}
                         disabled={slot.ocupado}
                         onClick={() => setHoraSeleccionada(slot.hora)}
-                        className={`py-3 rounded-xl text-sm font-bold transition-all border-2
+                        className={`
+                          relative py-3 rounded-xl text-sm font-bold transition-all border-2 flex flex-col items-center justify-center gap-0.5
                           ${slot.ocupado 
                             ? "border-slate-100 bg-slate-50 text-slate-300 opacity-50 cursor-not-allowed" 
                             : horaSeleccionada === slot.hora
@@ -373,6 +404,7 @@ export default function PaginaReservaPublica() {
                         `}
                       >
                         {slot.hora}
+                        {slot.motivo && <span className="text-[9px] font-black opacity-60 leading-none tracking-tighter">{slot.motivo}</span>}
                       </button>
                     ))}
                   </div>
@@ -381,7 +413,7 @@ export default function PaginaReservaPublica() {
 
               <Button 
                 onClick={() => setStep(3)} 
-                disabled={!horaSeleccionada}
+                disabled={!horaSeleccionada || esDiaCerrado}
                 className="w-full h-14 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl flex items-center justify-center gap-2 mt-4 disabled:opacity-50"
               >
                 Siguiente paso <ChevronRight size={18} />
@@ -389,7 +421,6 @@ export default function PaginaReservaPublica() {
             </div>
           )}
 
-          {/* PASO 3: DATOS DE CONTACTO */}
           {/* PASO 3: DATOS DE CONTACTO */}
           {step === 3 && (
             <div className="space-y-6 animate-in slide-in-from-right-4">
@@ -405,7 +436,6 @@ export default function PaginaReservaPublica() {
                 </div>
               </div>
 
-              {/* SUB-PASO 3.1: PEDIR TELÉFONO */}
               {!telefonoVerificado ? (
                 <div className="space-y-4 animate-in fade-in">
                   <div className="space-y-2">
@@ -449,11 +479,7 @@ export default function PaginaReservaPublica() {
                   </Button>
                 </div>
               ) : (
-                
-                /* SUB-PASO 3.2: NOMBRE Y CONFIRMAR */
                 <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-300">
-                  
-                  {/* Etiqueta del teléfono que acabamos de meter */}
                   <div className="flex justify-between items-center p-4 bg-slate-100 rounded-xl border border-slate-200">
                     <div className="flex items-center gap-3">
                       <div className="bg-indigo-100 text-indigo-600 p-2 rounded-lg"><Phone size={16} /></div>
@@ -467,7 +493,6 @@ export default function PaginaReservaPublica() {
                     </button>
                   </div>
 
-                  {/* Input del Nombre (Autocompletado o Vacío) */}
                   <div className="space-y-2">
                     <Label className="text-xs font-black text-slate-400 uppercase tracking-widest flex justify-between">
                       <span>Tu Nombre</span>
