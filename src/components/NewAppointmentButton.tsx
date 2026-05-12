@@ -80,9 +80,9 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
 
   useEffect(() => {
     async function cargarDatos() {
-      const { data: p } = await supabase.from("profesionales").select("id, nombre").order("nombre");
-      const { data: s } = await supabase.from("servicios").select("id, nombre, precio").order("nombre");
-      const { data: c } = await supabase.from("clientes").select("id, nombre, telefono").order("nombre");
+      const { data: p } = await supabase.from("profesionales").select("id, nombre").is("fecha_borrado", null).order("nombre");
+      const { data: s } = await supabase.from("servicios").select("id, nombre, precio").is("fecha_borrado", null).order("nombre");
+      const { data: c } = await supabase.from("clientes").select("id, nombre, telefono").is("fecha_borrado", null).order("nombre");
       const { data: a } = await supabase.from("ajustes").select("hora_apertura, hora_cierre").single();
       
       if (p) { setProfesionales(p); setProfesionalId(p[0]?.id || ""); }

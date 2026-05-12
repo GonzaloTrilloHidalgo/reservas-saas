@@ -25,6 +25,7 @@ export default function ConfiguracionPage() {
     const { data, error } = await supabase
       .from("ajustes")
       .select("*")
+      .is("fecha_borrado", null)
       .limit(1)
       .single();
 

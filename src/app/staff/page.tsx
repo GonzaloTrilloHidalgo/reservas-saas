@@ -33,7 +33,7 @@ export default function StaffPage() {
   }, []);
 
   async function cargarStaff() {
-    const { data } = await supabase.from("profesionales").select("*").order("nombre");
+    const { data } = await supabase.from("profesionales").select("*").is("fecha_borrado", null).order("nombre");
     if (data) setProfesionales(data);
     setLoading(false);
   }
@@ -66,7 +66,7 @@ export default function StaffPage() {
   async function confirmarBorrado() {
     if (!profesionalAEliminar) return;
 
-    const { error } = await supabase.from("profesionales").delete().eq("id", profesionalAEliminar);
+    const { error } = await supabase.from("profesionales").update({ fecha_borrado: new Date().toISOString() }).eq("id", profesionalAEliminar);
     
     if (error) {
       mostrarNotificacion(error.message, "error");

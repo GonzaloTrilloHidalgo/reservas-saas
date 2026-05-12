@@ -108,12 +108,13 @@ export default function CalendarView() {
     const { data: ajustesData } = await supabase.from("ajustes").select("hora_apertura, hora_cierre").limit(1).single();
     if (ajustesData) { setHoraApertura(ajustesData.hora_apertura); setHoraCierre(ajustesData.hora_cierre); }
 
-    const { data: staffData } = await supabase.from("profesionales").select("nombre");
+    const { data: staffData } = await supabase.from("profesionales").select("nombre").is("fecha_borrado", null).order("nombre");
     if (staffData) setProfesionales(staffData.map(p => p.nombre));
 
     const { data: citasData, error } = await supabase
       .from("citas")
-      .select(`id, servicio, cliente_nombre, fecha_inicio, fecha_fin, precio, profesionales (nombre, color), clientes (telefono)`);
+      .select(`id, servicio, cliente_nombre, fecha_inicio, fecha_fin, precio, profesionales (nombre, color), clientes (telefono)`)
+      .is("fecha_borrado", null);
     
     if (error) return console.error("Error al cargar:", error.message);
 

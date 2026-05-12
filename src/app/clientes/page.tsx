@@ -58,7 +58,7 @@ export default function ClientesPage() {
     }, []);
 
     async function cargarClientes() {
-        const { data } = await supabase.from("clientes").select("*").order("nombre");
+        const { data } = await supabase.from("clientes").select("*").is("fecha_borrado", null).order("nombre");
         if (data) setClientes(data);
         setLoading(false);
     }
@@ -107,7 +107,7 @@ export default function ClientesPage() {
 
     async function confirmarBorrado() {
         if (!clienteAEliminar) return;
-        const { error } = await supabase.from("clientes").delete().eq("id", clienteAEliminar);
+        const { error } = await supabase.from("clientes").update({ fecha_borrado: new Date().toISOString() }).eq("id", clienteAEliminar);
         if (!error) { mostrarNotificacion("Cliente eliminado", "exito"); cargarClientes(); }
         setClienteAEliminar(null);
     }
@@ -127,7 +127,7 @@ export default function ClientesPage() {
                 </header>
 
                 {toast && (
-                    <div className={`fixed bottom-8 right-8 z-150 p-4 rounded-xl shadow-2xl border flex items-center gap-3 animate-in slide-in-from-bottom-5 duration-300 ${toast.tipo === "error"
+                    <div className={`fixed bottom-8 right-8 z-[150] p-4 rounded-xl shadow-2xl border flex items-center gap-3 animate-in slide-in-from-bottom-5 duration-300 ${toast.tipo === "error"
                             ? "bg-white text-red-600 border-red-100 shadow-red-100/50"
                             : "bg-white text-emerald-600 border-emerald-100 shadow-emerald-100/50"
                         }`}>
@@ -140,7 +140,7 @@ export default function ClientesPage() {
 
                 {/* MODAL NUEVO CLIENTE EFICIENTE */}
                 {isModalOpen && (
-                    <div className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
                         <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
                             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                                 <h3 className="text-xl font-black text-slate-800">Ficha de Cliente</h3>
@@ -192,8 +192,40 @@ export default function ClientesPage() {
                     </div>
                 )}
 
-                {/* ... Resto del componente (Historial y Listado) ... */}
-                <div className={`fixed inset-y-0 right-0 w-full md:w-112.5 bg-white shadow-2xl z-60 transform transition-transform duration-300 ease-in-out border-l border-slate-200 flex flex-col ${clienteDetalle ? "translate-x-0" : "translate-x-full"}`}>
+                {/* MODAL DE CONFIRMACIÓN DE BORRADO DE CLIENTE */}
+                {clienteAEliminar && (
+                    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
+                            <div className="p-6 text-center flex flex-col items-center">
+                                <div className="bg-red-50 text-red-500 p-4 rounded-full mb-4">
+                                    <AlertTriangle size={32} />
+                                </div>
+                                <h3 className="text-xl font-bold text-slate-800 mb-2">¿Eliminar cliente?</h3>
+                                <p className="text-slate-500 text-sm">
+                                    Se borrará al cliente de tu directorio. Sus citas asociadas podrían quedarse sin nombre. Esta acción no se puede deshacer.
+                                </p>
+                            </div>
+                            <div className="flex border-t border-slate-100">
+                                <button 
+                                    onClick={() => setClienteAEliminar(null)} 
+                                    className="flex-1 py-4 text-sm font-bold text-slate-500 hover:bg-slate-50 transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <div className="w-px bg-slate-100"></div>
+                                <button 
+                                    onClick={confirmarBorrado} 
+                                    className="flex-1 py-4 text-sm font-bold text-red-600 hover:bg-red-50 transition-colors"
+                                >
+                                    Sí, eliminar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* HISTORIAL SLIDE-OVER */}
+                <div className={`fixed inset-y-0 right-0 w-full md:w-[450px] bg-white shadow-2xl z-[60] transform transition-transform duration-300 ease-in-out border-l border-slate-200 flex flex-col ${clienteDetalle ? "translate-x-0" : "translate-x-full"}`}>
                     {clienteDetalle && (
                         <>
                             <header className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
@@ -235,7 +267,7 @@ export default function ClientesPage() {
                                     <textarea
                                         value={notasEditables}
                                         onChange={(e) => setNotasEditables(e.target.value)}
-                                        className="w-full bg-amber-50/50 border border-amber-100 p-4 rounded-xl text-sm text-slate-800 outline-none focus:ring-2 focus:ring-amber-200 min-h-25 resize-none italic"
+                                        className="w-full bg-amber-50/50 border border-amber-100 p-4 rounded-xl text-sm text-slate-800 outline-none focus:ring-2 focus:ring-amber-200 min-h-[100px] resize-none italic"
                                         placeholder="Añade aquí detalles importantes sobre el cliente..."
                                     />
                                 </div>
@@ -252,7 +284,7 @@ export default function ClientesPage() {
                                         ) : (
                                             historialCitas.map((cita) => (
                                                 <div key={cita.id} className="relative pl-6 border-l-2 border-slate-100 pb-2">
-                                                    <div className="absolute -left-2.25 top-0 w-4 h-4 bg-white border-2 border-indigo-500 rounded-full" />
+                                                    <div className="absolute -left-[9px] top-0 w-4 h-4 bg-white border-2 border-indigo-500 rounded-full" />
                                                     <div className="bg-white border border-slate-100 p-3 rounded-xl shadow-sm">
                                                         <div className="flex justify-between items-start mb-1">
                                                             <span className="text-sm font-bold text-slate-800">{cita.servicio}</span>

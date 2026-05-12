@@ -41,6 +41,7 @@ export default function IngresosPage() {
     const { data, error } = await supabase
       .from("citas")
       .select(`id, precio, fecha_inicio, servicio, cliente_nombre, profesionales (nombre)`)
+      .is("fecha_borrado", null)
       .neq("servicio", "Bloqueo");
 
     if (!error && data) {
