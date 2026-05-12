@@ -101,28 +101,29 @@ export default function ConfiguracionPage() {
     <div className="flex min-h-screen bg-slate-50 relative">
       <Sidebar />
       <main className="flex-1 flex flex-col h-screen overflow-y-auto relative">
-        <header className="h-16 border-b border-slate-200 bg-white flex items-center px-8 shrink-0">
+        <header className="h-16 border-b border-slate-200 bg-white flex items-center px-4 md:px-8 shrink-0">
           <h2 className="text-sm font-bold text-slate-800 uppercase tracking-widest">Configuración General</h2>
         </header>
 
         {toast && (
-          <div className={`fixed bottom-8 right-8 z-50 p-4 rounded-xl shadow-xl border flex items-center gap-3 animate-in slide-in-from-bottom-5 ${toast.tipo === "error" ? "bg-red-50 text-red-600 border-red-100" : "bg-emerald-50 text-emerald-600 border-emerald-100"}`}>
+          <div className={`fixed bottom-8 right-4 md:right-8 z-50 p-4 rounded-xl shadow-xl border flex items-center gap-3 animate-in slide-in-from-bottom-5 ${toast.tipo === "error" ? "bg-red-50 text-red-600 border-red-100" : "bg-emerald-50 text-emerald-600 border-emerald-100"}`}>
             {toast.tipo === "error" ? <AlertCircle size={20} /> : <CheckCircle2 size={20} />}
             <span className="font-bold text-sm">{toast.mensaje}</span>
           </div>
         )}
 
-        <div className="p-8 max-w-4xl mx-auto w-full space-y-8 pb-20">
+        {/* AJUSTE RESPONSIVE: p-4 en móvil, p-8 en escritorio */}
+        <div className="p-4 md:p-8 max-w-4xl mx-auto w-full space-y-6 md:space-y-8 pb-24">
           
           {/* SECCIÓN 1: HORARIOS Y NEGOCIO */}
-          <section className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
+          <section className="bg-white rounded-2xl md:rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-4 md:p-6 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
               <Settings className="text-indigo-600" size={20} />
               <h3 className="font-black text-slate-800 uppercase text-xs tracking-widest">Ajustes del Establecimiento</h3>
             </div>
             
-            <div className="p-8 space-y-8">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="p-4 md:p-8 space-y-6 md:space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Building2 size={14}/> Nombre Comercial</label>
                   <input value={nombreNegocio} onChange={(e) => setNombreNegocio(e.target.value)} className="w-full border border-slate-200 p-3.5 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-slate-700 transition-all" />
@@ -130,7 +131,7 @@ export default function ConfiguracionPage() {
 
                 <div className="space-y-2">
                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Clock size={14}/> Jornada Laboral</label>
-                   <div className="flex items-center gap-2">
+                   <div className="flex items-center gap-2 w-full">
                       <select value={apertura} onChange={(e) => setApertura(Number(e.target.value))} className="flex-1 border border-slate-200 p-3.5 rounded-xl bg-slate-50 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500">
                         {[...Array(24)].map((_, i) => <option key={i} value={i}>{i.toString().padStart(2, '0')}:00h</option>)}
                       </select>
@@ -143,11 +144,11 @@ export default function ConfiguracionPage() {
               </div>
 
               {/* BLOQUE DE DESCANSO */}
-              <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100 space-y-4">
+              <div className="bg-indigo-50/50 p-4 md:p-6 rounded-2xl border border-indigo-100 space-y-4">
                 <div className="flex items-center gap-2 text-indigo-700 font-black text-[10px] uppercase tracking-widest">
                   <Coffee size={16} /> Horario de Descanso / Cierre Temporal
                 </div>
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-2 gap-3 md:gap-6">
                   <div>
                     <label className="text-[10px] font-bold text-indigo-400 uppercase block mb-1.5">Inicio Descanso</label>
                     <select value={inicioDescanso} onChange={(e) => setInicioDescanso(Number(e.target.value))} className="w-full border-none p-3.5 rounded-xl bg-white shadow-sm font-bold text-indigo-900 outline-none focus:ring-2 focus:ring-indigo-500">
@@ -173,38 +174,41 @@ export default function ConfiguracionPage() {
           </section>
 
           {/* SECCIÓN 2: FESTIVOS Y CIERRES */}
-          <section className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
+          <section className="bg-white rounded-2xl md:rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-4 md:p-6 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
               <CalendarOff className="text-red-500" size={20} />
               <h3 className="font-black text-slate-800 uppercase text-xs tracking-widest">Días de Cierre Totales</h3>
             </div>
             
-            <div className="p-8 space-y-6">
-              <div className="flex flex-col md:flex-row gap-4 items-end bg-red-50/30 p-5 rounded-2xl border border-red-100">
-                <div className="flex-1 w-full space-y-2">
+            <div className="p-4 md:p-8 space-y-6">
+              {/* AJUSTE RESPONSIVE: En móvil el formulario fluye hacia abajo, en PC se alinea al final */}
+              <div className="flex flex-col md:flex-row gap-4 items-start md:items-end bg-red-50/30 p-4 md:p-5 rounded-2xl border border-red-100">
+                <div className="w-full md:flex-1 space-y-2">
                   <label className="text-[10px] font-black text-red-500 uppercase tracking-widest">Fecha</label>
                   <input type="date" value={nuevaFechaCierre} onChange={(e) => setNuevaFechaCierre(e.target.value)} className="w-full p-3.5 rounded-xl border border-red-100 outline-none focus:ring-2 focus:ring-red-400 font-bold text-red-900" />
                 </div>
-                <div className="flex-1 w-full space-y-2">
+                <div className="w-full md:flex-1 space-y-2">
                   <label className="text-[10px] font-black text-red-500 uppercase tracking-widest">Motivo del cierre</label>
                   <input type="text" value={nuevoMotivo} onChange={(e) => setNuevoMotivo(e.target.value)} placeholder="Ej. Festivo Nacional" className="w-full p-3.5 rounded-xl border border-red-100 outline-none focus:ring-2 focus:ring-red-400 font-bold text-red-900 placeholder:text-red-200" />
                 </div>
-                <button onClick={añadirFestivo} className="bg-red-500 hover:bg-red-600 text-white p-4 rounded-xl transition-all shadow-lg shadow-red-200 active:scale-90"><Plus size={20} /></button>
+                <button onClick={añadirFestivo} className="w-full md:w-auto flex justify-center bg-red-500 hover:bg-red-600 text-white p-4 rounded-xl transition-all shadow-lg shadow-red-200 active:scale-95 mt-2 md:mt-0">
+                  <Plus size={20} /> <span className="md:hidden font-bold ml-2">Añadir Día</span>
+                </button>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
                 {festivos.length === 0 ? (
-                  <div className="col-span-full py-10 text-center border-2 border-dashed border-slate-100 rounded-3xl">
+                  <div className="col-span-full py-8 md:py-10 text-center border-2 border-dashed border-slate-100 rounded-3xl">
                     <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">No hay cierres programados</p>
                   </div>
                 ) : (
                   festivos.map((f) => (
-                    <div key={f.id} className="flex justify-between items-center p-5 bg-white border border-slate-100 rounded-2xl group hover:border-red-200 transition-all shadow-sm">
+                    <div key={f.id} className="flex justify-between items-center p-4 md:p-5 bg-white border border-slate-100 rounded-2xl group hover:border-red-200 transition-all shadow-sm">
                       <div>
                         <p className="font-black text-slate-800">{new Date(f.fecha).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
                         <p className="text-[10px] text-red-400 uppercase font-black tracking-tighter">{f.motivo || 'Cierre Total'}</p>
                       </div>
-                      <button onClick={() => eliminarFestivo(f.id)} className="text-slate-200 hover:text-red-500 p-2 transition-colors rounded-lg hover:bg-red-50"><Trash2 size={18} /></button>
+                      <button onClick={() => eliminarFestivo(f.id)} className="text-slate-300 hover:text-red-500 p-2 transition-colors rounded-lg hover:bg-red-50"><Trash2 size={18} /></button>
                     </div>
                   ))
                 )}
