@@ -23,21 +23,103 @@ body {
   font-family: var(--font-sans); /* Aquí activamos la fuente profesional */
 }
 
-/* Personalización de React Big Calendar */
-.rbc-event {
-  background-color: #4f46e5 !important; /* Color Indigo 600 de Tailwind */
-  border-radius: 6px !important;
-  padding: 2px 5px !important;
+/* ==========================================================================
+   CUSTOM REACT-PHONE-NUMBER-INPUT (ESTILOS DEL TELÉFONO)
+   ========================================================================== */
+   
+/* Quita los bordes por defecto para usar los tuyos de Tailwind */
+.phone-input-style .PhoneInputInput {
   border: none !important;
+  outline: none !important;
+  background: transparent !important;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #1e293b;
 }
 
+/* Asegura que el desplegable de países se vea por encima de los modales */
+.PhoneInputCountrySelectDropdown {
+  z-index: 200 !important;
+}
+
+/* ==========================================================================
+   CUSTOM REACT-BIG-CALENDAR (MODERN THEME)
+   ========================================================================== */
+
+/* Quitar bordes exteriores gruesos */
+.rbc-calendar {
+  border: none !important;
+  font-family: inherit;
+}
+
+/* Suavizar todas las líneas de la cuadrícula */
+.rbc-month-view,
+.rbc-time-view,
+.rbc-agenda-view,
+.rbc-time-header-content,
+.rbc-time-content,
+.rbc-timeslot-group,
+.rbc-day-bg,
+.rbc-month-row,
+.rbc-header {
+  border-color: #f1f5f9 !important; /* slate-100 */
+}
+
+/* Cabeceras de los días (Lunes, Martes...) */
+.rbc-header {
+  padding: 12px 0 !important;
+  font-weight: 800 !important;
+  color: #64748b !important; /* slate-500 */
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  border-bottom: 2px solid #f1f5f9 !important;
+}
+
+/* Color de fondo del día actual para destacarlo visualmente */
 .rbc-today {
-  background-color: #f8fafc !important; /* Color Slate 50 de Tailwind */
+  background-color: #f8fafc !important; /* slate-50 */
 }
 
-.rbc-toolbar button:active,
-.rbc-toolbar button.rbc-active {
-  background-color: #e0e7ff !important;
-  color: #4f46e5 !important;
-  border-color: #c7d2fe !important;
+/* Línea indicadora de la hora actual (La línea roja) */
+.rbc-current-time-indicator {
+  background-color: #4f46e5 !important; /* indigo-600 */
+  height: 2px !important;
+}
+.rbc-current-time-indicator::before {
+  content: '';
+  position: absolute;
+  left: -5px;
+  top: -4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #4f46e5;
+}
+
+/* Quitar botón feo de "Show more" */
+.rbc-show-more {
+  background-color: #e2e8f0;
+  color: #475569;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-weight: bold;
+  font-size: 11px;
+}
+
+/* Columna de las horas (09:00, 10:00...) */
+.rbc-time-gutter .rbc-timeslot-group {
+  border-right: 1px solid #f1f5f9 !important;
+}
+.rbc-label {
+  color: #94a3b8; /* slate-400 */
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0 8px;
+}
+
+/* Eliminar outline azul feo al hacer click en celdas */
+.rbc-day-slot .rbc-time-slot,
+.rbc-event {
+  outline: none !important;
 }
