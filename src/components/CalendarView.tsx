@@ -217,7 +217,7 @@ export default function CalendarView() {
     if (!selectedEvent?.telefono) return alert("Este cliente no tiene número de teléfono registrado.");
     const numeroLimpio = selectedEvent.telefono.replace(/\+/g, "").replace(/\s/g, "");
     const fechaLegible = format(selectedEvent.start, "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es });
-    const mensaje = `¡Hola ${selectedEvent.cliente_nombre}! 👋\n\nTe escribo para recordarte tu próxima cita para *${selectedEvent.servicio}* el *${fechaLegible}h*.\n\nPor favor, confírmame si vas a poder asistir. ¡Muchas gracias!`;
+    const mensaje = `¡Hola ${selectedEvent.cliente_nombre}!\n\nTe escribo para recordarte tu próxima cita para *${selectedEvent.servicio}* el *${fechaLegible}h*.\n\nPor favor, confírmame si vas a poder asistir. ¡Muchas gracias!`;
     window.open(`https://wa.me/${numeroLimpio}?text=${encodeURIComponent(mensaje)}`, "_blank");
   };
 

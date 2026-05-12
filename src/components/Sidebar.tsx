@@ -74,10 +74,11 @@ export default function Sidebar() {
 
       <aside className={`
         fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-slate-200 flex flex-col h-screen transition-transform duration-300 ease-in-out
-        lg:relative lg:translate-x-0 
+        lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 
         ${isOpen ? "translate-x-0" : "-translate-x-full"}
       `}>
         
+        {/* Cabecera Sidebar */}
         <div className="h-16 flex items-center px-6 border-b border-slate-100 gap-3 shrink-0">
           <div className="bg-indigo-600 p-1.5 rounded-lg shrink-0">
             <Layers className="text-white" size={20} />
@@ -87,6 +88,7 @@ export default function Sidebar() {
           </h1>
         </div>
 
+        {/* Zona de Menú (Con Scroll) */}
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
           {menuItems.map((item) => {
             const isActive = pathname === item.href;
@@ -108,7 +110,8 @@ export default function Sidebar() {
           })}
         </nav>
 
-        <div className="mt-auto bg-slate-50/50">
+        {/* Zona Inferior Fija */}
+        <div className="shrink-0 bg-slate-50/50 border-t border-slate-100">
           <div className="p-4">
             <button 
               onClick={handleSignOut}
@@ -119,7 +122,7 @@ export default function Sidebar() {
             </button>
           </div>
 
-          <div className="pb-4 border-slate-100">
+          <div className="pb-4">
             <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest text-center">
               Powered by Velo Engine
             </p>
@@ -127,6 +130,7 @@ export default function Sidebar() {
         </div>
       </aside>
 
+      {/* Overlay para móvil */}
       {isOpen && (
         <div 
           onClick={() => setIsOpen(false)}
