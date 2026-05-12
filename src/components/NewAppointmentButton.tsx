@@ -99,6 +99,15 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
     }
   }, [open, fecha, profesionalId, duracionMinutos, tipo]);
 
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (sugerenciasRef.current && !sugerenciasRef.current.contains(event.target as Node)) setMostrarSugerencias(false);
+      if (prefijosRef.current && !prefijosRef.current.contains(event.target as Node)) setMostrarPrefijos(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   async function calcularHuecosDisponibles() {
     setCargandoHuecos(true);
     setHoraSeleccionada(null);
@@ -203,15 +212,18 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
         </button>
       </DialogTrigger>
 
-      <DialogContent className="sm:max-w-3xl bg-white p-0 border-none shadow-2xl overflow-hidden flex flex-col h-[95vh] sm:h-auto">
-        <DialogHeader className="p-6 border-b border-slate-100 shrink-0">
+      {/* AQUÍ ESTÁ LA MAGIA RESPONSIVE: h-[95vh] para móvil, sm:h-[85vh] para escritorio, sm:max-w-4xl */}
+      <DialogContent className="sm:max-w-4xl bg-white p-0 border-none shadow-2xl overflow-hidden flex flex-col h-[95vh] sm:h-[85vh]">
+        
+        <DialogHeader className="p-6 border-b border-slate-100 shrink-0 bg-white z-10">
           <DialogTitle className="text-2xl font-black text-slate-800">Agendar Cita</DialogTitle>
         </DialogHeader>
 
-        <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+        {/* CONTENEDOR FLEX: Columna en móvil, Fila en ordenador */}
+        <div className="flex flex-col md:flex-row flex-1 overflow-hidden relative bg-white">
           
           {/* PANEL IZQUIERDO: FORMULARIO */}
-          <div className="flex-1 p-6 md:p-8 border-r border-slate-100 overflow-y-auto bg-white">
+          <div className="flex-1 p-6 md:p-8 overflow-y-auto w-full relative z-0">
             <div className="flex bg-slate-100 p-1 rounded-xl mb-6 w-fit">
               <button type="button" onClick={() => setTipo("cita")} className={`px-6 py-2 text-xs font-bold rounded-lg transition-all ${tipo === "cita" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500"}`}>Cliente</button>
               <button type="button" onClick={() => setTipo("bloqueo")} className={`px-6 py-2 text-xs font-bold rounded-lg transition-all ${tipo === "bloqueo" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500"}`}>Bloqueo</button>
@@ -239,14 +251,14 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
                     <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest">Teléfono</Label>
                     <div className="flex gap-2">
                       <div className="relative" ref={prefijosRef}>
-                        <button type="button" onClick={() => setMostrarPrefijos(!mostrarPrefijos)} className="h-12 px-3 border border-slate-200 rounded-xl flex items-center gap-2 bg-slate-50 text-sm font-bold">
+                        <button type="button" onClick={() => setMostrarPrefijos(!mostrarPrefijos)} className="h-12 px-3 border border-slate-200 rounded-xl flex items-center gap-2 bg-slate-50 text-sm font-bold hover:bg-slate-100 transition-colors">
                           <img src={`https://flagcdn.com/w20/${infoP.iso}.png`} className="w-5 rounded-sm" alt="flag" /> {clientePrefijo}
                         </button>
                         {mostrarPrefijos && (
-                          <div className="absolute top-14 left-0 z-[60] w-48 bg-white border border-slate-100 rounded-xl shadow-xl max-h-48 overflow-y-auto p-1">
+                          <div className="absolute top-14 left-0 z-[60] w-52 bg-white border border-slate-100 rounded-xl shadow-xl max-h-48 overflow-y-auto p-1">
                             {PREFIJOS.map(p => (
                               <button key={p.iso} type="button" onClick={() => {setClientePrefijo(p.code); setMostrarPrefijos(false);}} className="w-full flex items-center gap-3 px-3 py-2 hover:bg-slate-50 rounded-lg text-xs font-bold text-slate-600">
-                                <img src={`https://flagcdn.com/w20/${p.iso}.png`} className="w-4" alt={p.country} /> {p.country}
+                                <img src={`https://flagcdn.com/w20/${p.iso}.png`} className="w-4" alt={p.country} /> <span className="truncate">{p.country}</span> <span className="ml-auto text-slate-400">{p.code}</span>
                               </button>
                             ))}
                           </div>
@@ -262,7 +274,7 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest">Servicio</Label>
-                      <select value={servicioId} onChange={(e) => {setServicioId(e.target.value); setPrecioActual(servicios.find(s=>s.id == e.target.value)?.precio || "")}} className="w-full h-12 border border-slate-200 rounded-xl px-4 text-sm font-medium bg-white outline-none">
+                      <select value={servicioId} onChange={(e) => {setServicioId(e.target.value); setPrecioActual(servicios.find(s=>s.id == e.target.value)?.precio || "")}} className="w-full h-12 border border-slate-200 rounded-xl px-4 text-sm font-medium bg-white outline-none focus:ring-2 focus:ring-indigo-500">
                         <option value="">Seleccionar...</option>
                         {servicios.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
                       </select>
@@ -278,13 +290,13 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest">Profesional</Label>
-                  <select value={profesionalId} onChange={(e) => setProfesionalId(e.target.value)} className="w-full h-12 border border-slate-200 rounded-xl px-4 text-sm font-medium bg-white outline-none">
+                  <select value={profesionalId} onChange={(e) => setProfesionalId(e.target.value)} className="w-full h-12 border border-slate-200 rounded-xl px-4 text-sm font-medium bg-white outline-none focus:ring-2 focus:ring-indigo-500">
                     {profesionales.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                   </select>
                 </div>
                 <div className="space-y-2">
                   <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest">Duración</Label>
-                  <select value={duracionMinutos} onChange={(e) => setDuracionMinutos(parseInt(e.target.value))} className="w-full h-12 border border-slate-200 rounded-xl px-4 text-sm font-medium bg-white outline-none">
+                  <select value={duracionMinutos} onChange={(e) => setDuracionMinutos(parseInt(e.target.value))} className="w-full h-12 border border-slate-200 rounded-xl px-4 text-sm font-medium bg-white outline-none focus:ring-2 focus:ring-indigo-500">
                     <option value="15">15 min</option><option value="30">30 min</option><option value="45">45 min</option><option value="60">1 hora</option><option value="90">1.5 h</option><option value="120">2 h</option>
                   </select>
                 </div>
@@ -300,43 +312,49 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
             </form>
           </div>
 
-          {/* PANEL DERECHO: SELECTOR DE HORAS */}
-          <div className="w-full md:w-[320px] bg-slate-50 p-6 md:p-8 flex flex-col shrink-0">
-            <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest mb-4 flex justify-between items-center">
-              Horas Disponibles
-              {cargandoHuecos && <div className="animate-spin h-3 w-3 border-2 border-indigo-600 border-t-transparent rounded-full" />}
-            </Label>
-            
-            <div className="grid grid-cols-4 md:grid-cols-3 gap-2 overflow-y-auto mb-6 max-h-[180px] md:max-h-none scrollbar-hide">
-              {huecosDisponibles.map((slot) => (
-                <button
-                  key={slot.hora}
-                  disabled={slot.ocupado}
-                  onClick={() => setHoraSeleccionada(slot.hora)}
-                  className={`
-                    py-3 rounded-xl text-xs font-bold transition-all border
-                    ${slot.ocupado 
-                      ? "bg-slate-200/50 text-slate-400 border-transparent opacity-50 cursor-not-allowed" 
-                      : horaSeleccionada === slot.hora
-                        ? "bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-200"
-                        : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600 shadow-sm"
-                    }
-                  `}
-                >
-                  {slot.hora}
-                </button>
-              ))}
-            </div>
+          {/* PANEL DERECHO: SELECTOR DE HORAS (Ancho fijo en escritorio) */}
+          <div className="w-full md:w-[340px] bg-slate-50 flex flex-col shrink-0 border-t md:border-t-0 md:border-l border-slate-200">
+            <div className="p-6 md:p-8 flex-1 flex flex-col overflow-hidden">
+              
+              <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest mb-4 flex justify-between items-center shrink-0">
+                Horas Disponibles
+                {cargandoHuecos && <div className="animate-spin h-3 w-3 border-2 border-indigo-600 border-t-transparent rounded-full" />}
+              </Label>
+              
+              {/* Cuadrícula de horas con su propio scroll independiente */}
+              <div className="grid grid-cols-4 md:grid-cols-3 gap-2 overflow-y-auto flex-1 content-start scrollbar-hide pr-1">
+                {huecosDisponibles.map((slot) => (
+                  <button
+                    key={slot.hora}
+                    disabled={slot.ocupado}
+                    onClick={() => setHoraSeleccionada(slot.hora)}
+                    className={`
+                      py-3 rounded-xl text-xs font-bold transition-all border
+                      ${slot.ocupado 
+                        ? "bg-slate-200/50 text-slate-400 border-transparent opacity-50 cursor-not-allowed" 
+                        : horaSeleccionada === slot.hora
+                          ? "bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-200 scale-105"
+                          : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600 shadow-sm"
+                      }
+                    `}
+                  >
+                    {slot.hora}
+                  </button>
+                ))}
+              </div>
 
-            <div className="mt-auto md:mt-4 pt-4 border-t border-slate-200">
-              {errorMsg && <p className="text-[10px] text-red-500 font-bold mb-3 text-center">{errorMsg}</p>}
-              <Button 
-                onClick={handleSubmit} 
-                disabled={isSubmitting || !horaSeleccionada} 
-                className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl shadow-xl shadow-indigo-100 transition-all active:scale-95 disabled:bg-slate-300"
-              >
-                {isSubmitting ? "Procesando..." : "Confirmar Cita"}
-              </Button>
+              {/* Contenedor del botón de confirmación, siempre visible abajo */}
+              <div className="mt-6 pt-4 border-t border-slate-200 shrink-0">
+                {errorMsg && <p className="text-[10px] text-red-500 font-bold mb-3 text-center">{errorMsg}</p>}
+                <Button 
+                  onClick={handleSubmit} 
+                  disabled={isSubmitting || !horaSeleccionada} 
+                  className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl shadow-xl shadow-indigo-100 transition-all active:scale-95 disabled:bg-slate-300 disabled:shadow-none"
+                >
+                  {isSubmitting ? "Procesando..." : "Confirmar Cita"}
+                </Button>
+              </div>
+
             </div>
           </div>
 

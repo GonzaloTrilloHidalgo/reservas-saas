@@ -6,7 +6,7 @@ import { format, parse, startOfWeek, getDay, isToday, isSameWeek } from "date-fn
 import { es } from "date-fns/locale";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import { supabase } from "@/lib/supabase"; 
-import { CalendarDays, Trophy, Clock, User, Calendar as CalendarIcon, Trash2, Ban, Banknote } from "lucide-react";
+import { CalendarDays, Trophy, Clock, User, Calendar as CalendarIcon, Trash2, Ban, Banknote, MessageCircle } from "lucide-react";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -16,6 +16,7 @@ const localizer = dateFnsLocalizer({
   format, parse, startOfWeek, getDay, locales,
 });
 
+// 1. AÑADIMOS DATOS EXTRA A LA INTERFAZ
 interface CitaCalendario {
   id: string;
   title: string;
@@ -25,6 +26,9 @@ interface CitaCalendario {
   color?: string;
   esBloqueo?: boolean;
   precio?: number; 
+  telefono?: string;
+  cliente_nombre?: string;
+  servicio?: string;
 }
 
 export default function CalendarView() {
@@ -35,7 +39,6 @@ export default function CalendarView() {
   const [view, setView] = useState<View>("week");
   const [date, setDate] = useState(new Date()); 
 
-  // ESTADOS DINÁMICOS PARA EL HORARIO
   const [horaApertura, setHoraApertura] = useState<number>(9);
   const [horaCierre, setHoraCierre] = useState<number>(20);
 
@@ -58,26 +61,16 @@ export default function CalendarView() {
   }, [activeFilter, allEvents]);
 
   const cargarDatosIniciales = async () => {
-    // 1. CARGAMOS LOS AJUSTES DE HORARIO
-    const { data: ajustesData } = await supabase
-      .from("ajustes")
-      .select("hora_apertura, hora_cierre")
-      .limit(1)
-      .single();
+    const { data: ajustesData } = await supabase.from("ajustes").select("hora_apertura, hora_cierre").limit(1).single();
+    if (ajustesData) { setHoraApertura(ajustesData.hora_apertura); setHoraCierre(ajustesData.hora_cierre); }
 
-    if (ajustesData) {
-      setHoraApertura(ajustesData.hora_apertura);
-      setHoraCierre(ajustesData.hora_cierre);
-    }
-
-    // 2. CARGAMOS PROFESIONALES
     const { data: staffData } = await supabase.from("profesionales").select("nombre");
     if (staffData) setProfesionales(staffData.map(p => p.nombre));
 
-    // 3. CARGAMOS CITAS
+    // 2. PEDIMOS EL TELÉFONO DEL CLIENTE EN LA CONSULTA
     const { data: citasData, error } = await supabase
       .from("citas")
-      .select(`id, servicio, cliente_nombre, fecha_inicio, fecha_fin, precio, profesionales (nombre, color)`);
+      .select(`id, servicio, cliente_nombre, fecha_inicio, fecha_fin, precio, profesionales (nombre, color), clientes (telefono)`);
     
     if (error) return console.error("Error al cargar:", error.message);
 
@@ -92,7 +85,10 @@ export default function CalendarView() {
           profesional: cita.profesionales?.nombre || "Sin asignar",
           color: cita.profesionales?.color || "#6366f1",
           esBloqueo: esBloqueo,
-          precio: cita.precio || 0 
+          precio: cita.precio || 0,
+          telefono: cita.clientes?.telefono || "", // Guardamos el teléfono
+          cliente_nombre: cita.cliente_nombre,     // Guardamos el nombre limpio
+          servicio: cita.servicio                  // Guardamos el servicio limpio
         };
       });
       setAllEvents(citasFormateadas);
@@ -117,6 +113,21 @@ export default function CalendarView() {
     }
   };
 
+  // 3. FUNCIÓN PARA ENVIAR EL WHATSAPP
+  const enviarWhatsApp = () => {
+    if (!selectedEvent?.telefono) {
+      alert("Este cliente no tiene número de teléfono registrado.");
+      return;
+    }
+
+    const numeroLimpio = selectedEvent.telefono.replace(/\+/g, "").replace(/\s/g, "");
+    const fechaLegible = format(selectedEvent.start, "EEEE d 'de' MMMM 'a las' HH:mm", { locale: es });
+    
+    const mensaje = `¡Hola ${selectedEvent.cliente_nombre}! 👋\n\nTe escribo para recordarte tu próxima cita para *${selectedEvent.servicio}* el *${fechaLegible}h*.\n\nPor favor, confírmame si vas a poder asistir. ¡Muchas gracias!`;
+    
+    window.open(`https://wa.me/${numeroLimpio}?text=${encodeURIComponent(mensaje)}`, "_blank");
+  };
+
   const eventPropGetter = (event: CitaCalendario) => {
     const bgColor = event.esBloqueo ? "#64748b" : (event.color || "#6366f1");
     return {
@@ -132,13 +143,10 @@ export default function CalendarView() {
     };
   };
 
-  // MATEMÁTICAS FINANCIERAS
   const citasReales = allEvents.filter(c => !c.esBloqueo);
-  
   const arrayCitasHoy = citasReales.filter(cita => isToday(cita.start));
   const citasHoy = arrayCitasHoy.length;
   const ingresosHoy = arrayCitasHoy.reduce((sum, cita) => sum + (cita.precio || 0), 0);
-
   const arrayCitasSemana = citasReales.filter(cita => isSameWeek(cita.start, new Date(), { weekStartsOn: 1 }));
   const ingresosSemana = arrayCitasSemana.reduce((sum, cita) => sum + (cita.precio || 0), 0);
 
@@ -151,41 +159,33 @@ export default function CalendarView() {
   let topProfesional = "Sin datos";
   let maxCitas = 0;
   Object.entries(conteoPro).forEach(([nombre, cantidad]) => {
-    if (nombre !== "Sin asignar" && cantidad > maxCitas) {
-      maxCitas = cantidad;
-      topProfesional = nombre;
-    }
+    if (nombre !== "Sin asignar" && cantidad > maxCitas) { maxCitas = cantidad; topProfesional = nombre; }
   });
 
-  // APLICAMOS LOS LÍMITES DE HORARIO DINÁMICOS
   const minTime = new Date(); minTime.setHours(horaApertura, 0, 0);
   const maxTime = new Date(); maxTime.setHours(horaCierre, 0, 0);
 
   return (
     <div className="h-full w-full flex flex-col gap-4 relative">
       
+      {/* TARJETAS DE ESTADÍSTICAS */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
           <div className="bg-indigo-50 p-3 rounded-lg text-indigo-600"><CalendarDays size={24} /></div>
           <div><p className="text-sm font-medium text-slate-500">Citas Hoy</p><p className="text-2xl font-bold text-slate-800">{citasHoy}</p></div>
         </div>
-
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
           <div className="bg-emerald-50 p-3 rounded-lg text-emerald-600"><Banknote size={24} /></div>
           <div><p className="text-sm font-medium text-slate-500">Ingresos Hoy</p><p className="text-2xl font-bold text-slate-800">{ingresosHoy.toFixed(2)}€</p></div>
         </div>
-
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
           <div className="bg-blue-50 p-3 rounded-lg text-blue-600"><Banknote size={24} /></div>
           <div><p className="text-sm font-medium text-slate-500">Caja Semanal</p><p className="text-2xl font-bold text-slate-800">{ingresosSemana.toFixed(2)}€</p></div>
         </div>
-
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
           <div className="bg-amber-50 p-3 rounded-lg text-amber-500"><Trophy size={24} /></div>
           <div><p className="text-sm font-medium text-slate-500">Top Pro (Semana)</p><p className="text-lg font-bold text-slate-800 truncate">{topProfesional} <span className="text-sm text-slate-400 font-normal">({maxCitas})</span></p></div>
         </div>
-
       </div>
 
       <div className="flex flex-wrap gap-2 p-1 bg-slate-100 rounded-xl w-fit border border-slate-200">
@@ -195,6 +195,7 @@ export default function CalendarView() {
         ))}
       </div>
 
+      {/* CALENDARIO */}
       <div className="flex-1 overflow-x-auto min-h-150 bg-white rounded-xl border border-slate-200 p-2 shadow-sm">
         <Calendar
           localizer={localizer} events={filteredEvents} eventPropGetter={eventPropGetter} startAccessor="start" endAccessor="end" culture="es"
@@ -204,8 +205,9 @@ export default function CalendarView() {
         />
       </div>
 
+      {/* MODAL DE DETALLES */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-md bg-white border border-slate-200 shadow-xl opacity-100! transition-all">
+        <DialogContent className="sm:max-w-md bg-white border border-slate-200 shadow-xl opacity-100 transition-all">
           <DialogHeader>
             <DialogTitle className="text-slate-900 text-xl border-b pb-2">
               {showConfirmDelete ? "Confirmar Cancelación" : (selectedEvent?.esBloqueo ? "Detalles del Bloqueo" : "Detalles de la Reserva")}
@@ -252,9 +254,24 @@ export default function CalendarView() {
                     </div>
                   </div>
 
-                  <button onClick={() => setShowConfirmDelete(true)} className="mt-6 w-full bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-bold py-3 rounded-lg flex justify-center items-center gap-2 transition-colors">
-                    <Trash2 size={18} /> {selectedEvent.esBloqueo ? "Quitar Bloqueo" : "Cancelar esta cita"}
-                  </button>
+                  {/* 4. BOTONES DE ACCIÓN (WHATSAPP + BORRAR) */}
+                  <div className="mt-4 flex flex-col gap-2">
+                    {!selectedEvent.esBloqueo && selectedEvent.telefono && (
+                      <button 
+                        onClick={enviarWhatsApp} 
+                        className="w-full bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200 font-bold py-3 rounded-lg flex justify-center items-center gap-2 transition-colors"
+                      >
+                        <MessageCircle size={18} /> Avisar por WhatsApp
+                      </button>
+                    )}
+                    
+                    <button 
+                      onClick={() => setShowConfirmDelete(true)} 
+                      className="w-full bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-bold py-3 rounded-lg flex justify-center items-center gap-2 transition-colors"
+                    >
+                      <Trash2 size={18} /> {selectedEvent.esBloqueo ? "Quitar Bloqueo" : "Cancelar esta cita"}
+                    </button>
+                  </div>
                 </>
               ) : (
                 <div className="text-center py-4 animate-in fade-in zoom-in duration-200">
