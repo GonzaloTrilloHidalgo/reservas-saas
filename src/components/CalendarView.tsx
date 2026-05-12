@@ -37,11 +37,6 @@ const CustomToolbar = (toolbar: any) => {
   const goToNext = () => toolbar.onNavigate('NEXT');
   const goToCurrent = () => toolbar.onNavigate('TODAY');
 
-  const label = () => {
-    const date = toolbar.date;
-    return <span className="capitalize">{format(date, 'MMMM yyyy', { locale: es })}</span>;
-  };
-
   return (
     <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4 bg-white p-2 rounded-2xl">
       <div className="flex items-center gap-2">
@@ -55,9 +50,10 @@ const CustomToolbar = (toolbar: any) => {
         </div>
       </div>
 
-      <h2 className="text-xl md:text-2xl font-black text-slate-800 flex items-center gap-2">
+      <h2 className="text-xl md:text-2xl font-black text-slate-800 flex items-center gap-2 capitalize">
         <CalendarDays className="text-indigo-600" size={24} />
-        {label()}
+        {/* AQUÍ ESTÁ LA MAGIA: Usamos el label automático de la librería */}
+        {toolbar.label}
       </h2>
 
       <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl overflow-hidden p-1 gap-1">
