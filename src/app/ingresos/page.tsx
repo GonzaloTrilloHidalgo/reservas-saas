@@ -12,8 +12,8 @@ import {
   Calendar as CalendarIcon, 
   Award, 
   FileSpreadsheet,
-  AlertCircle,   // <- Nuevo icono para errores
-  CheckCircle2   // <- Nuevo icono para éxito
+  AlertCircle,
+  CheckCircle2
 } from "lucide-react";
 import * as XLSX from "xlsx";
 
@@ -30,7 +30,7 @@ export default function IngresosPage() {
   const [citas, setCitas] = useState<CitaIngreso[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // NUEVO ESTADO: Controlador de notificaciones flotantes (Toasts)
+  // Controlador de notificaciones flotantes (Toasts)
   const [toast, setToast] = useState<{ mensaje: string; tipo: "error" | "exito" } | null>(null);
 
   useEffect(() => {
@@ -42,7 +42,8 @@ export default function IngresosPage() {
       .from("citas")
       .select(`id, precio, fecha_inicio, servicio, cliente_nombre, profesionales (nombre)`)
       .is("fecha_borrado", null)
-      .neq("servicio", "Bloqueo");
+      .neq("servicio", "Bloqueo")
+      .eq("estado", "completada"); // <-- MAGIA FINANCIERA: Solo traemos lo que realmente se ha cobrado
 
     if (!error && data) {
       const ingresosFormateados = data.map((cita: any) => ({
@@ -70,8 +71,7 @@ export default function IngresosPage() {
     );
 
     if (citasFiltradas.length === 0) {
-      // notificación elegante
-      mostrarNotificacion("No hay citas este mes para exportar.", "error");
+      mostrarNotificacion("No hay ingresos confirmados este mes para exportar.", "error");
       return;
     }
 
@@ -85,7 +85,6 @@ export default function IngresosPage() {
 
     const worksheet = XLSX.utils.json_to_sheet(datosExcel);
     const workbook = XLSX.utils.book_new();
-    const nombreMes = format(new Date(), "MMMM yyyy", { locale: es });
     XLSX.utils.book_append_sheet(workbook, worksheet, "Facturación");
 
     worksheet["!cols"] = [{ wch: 20 }, { wch: 25 }, { wch: 25 }, { wch: 20 }, { wch: 15 }];
@@ -213,6 +212,7 @@ export default function IngresosPage() {
                     </div>
                   </div>
                 ))}
+                {rankingGlobal.length === 0 && <p className="text-sm text-slate-400 italic text-center py-4">Aún no hay ingresos cobrados.</p>}
               </div>
             </div>
 
@@ -230,6 +230,7 @@ export default function IngresosPage() {
                     </span>
                   </li>
                 ))}
+                {historialMeses.length === 0 && <p className="text-sm text-slate-400 italic text-center py-10">Sin histórico disponible.</p>}
               </ul>
             </div>
           </div>

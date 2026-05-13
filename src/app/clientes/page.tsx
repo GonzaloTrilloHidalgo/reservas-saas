@@ -11,7 +11,6 @@ import {
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 
-// Importación de la librería inteligente de teléfono
 import 'react-phone-number-input/style.css';
 import PhoneInput, { isValidPhoneNumber } from 'react-phone-number-input';
 
@@ -29,6 +28,7 @@ interface CitaHistorial {
     servicio: string;
     precio: number;
     profesionales: { nombre: string };
+    estado: string;
 }
 
 export default function ClientesPage() {
@@ -36,18 +36,15 @@ export default function ClientesPage() {
     const [busqueda, setBusqueda] = useState("");
     const [loading, setLoading] = useState(true);
 
-    // Estados UI
     const [toast, setToast] = useState<{ mensaje: string; tipo: "error" | "exito" } | null>(null);
     const [clienteAEliminar, setClienteAEliminar] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
-    // Estados Historial
     const [clienteDetalle, setClienteDetalle] = useState<Cliente | null>(null);
     const [historialCitas, setHistorialCitas] = useState<CitaHistorial[]>([]);
     const [cargandoHistorial, setCargandoHistorial] = useState(false);
     const [notasEditables, setNotasEditables] = useState("");
 
-    // Formulario Nuevo Cliente Simplificado
     const [nombre, setNombre] = useState("");
     const [telefono, setTelefono] = useState<string | undefined>("");
     const [email, setEmail] = useState("");
@@ -72,9 +69,17 @@ export default function ClientesPage() {
         setClienteDetalle(cliente);
         setNotasEditables(cliente.notas || "");
         setCargandoHistorial(true);
-        const { data } = await supabase.from("citas").select(`id, fecha_inicio, servicio, precio, profesionales (nombre)`).eq("cliente_id", cliente.id).order("fecha_inicio", { ascending: false });
+        const { data } = await supabase.from("citas").select(`id, fecha_inicio, servicio, precio, profesionales (nombre), estado`).eq("cliente_id", cliente.id).order("fecha_inicio", { ascending: false });
         if (data) setHistorialCitas(data as any);
         setCargandoHistorial(false);
+    }
+
+    // NUEVA FUNCIÓN PARA REVERTIR ESTADOS DESDE EL CRM
+    async function cambiarEstadoCita(id: string, nuevoEstado: string) {
+        const { error } = await supabase.from("citas").update({ estado: nuevoEstado }).eq("id", id);
+        if (!error && clienteDetalle) {
+            abrirHistorial(clienteDetalle); // Recarga el historial lateral automáticamente
+        }
     }
 
     async function guardarNotas() {
@@ -86,12 +91,10 @@ export default function ClientesPage() {
     async function guardarCliente() {
         if (!nombre.trim()) return mostrarNotificacion("El nombre es obligatorio", "error");
 
-        // Validación de número real antes de guardar
         if (telefono && !isValidPhoneNumber(telefono)) {
             return mostrarNotificacion("El número de teléfono no es válido para el país seleccionado", "error");
         }
 
-        // El teléfono ya viene con el prefijo incluido gracias a PhoneInput
         if (telefono) {
             const { data: existente } = await supabase.from("clientes").select("nombre").eq("telefono", telefono).maybeSingle();
             if (existente) return mostrarNotificacion(`El teléfono ya pertenece a ${existente.nombre}.`, "error");
@@ -113,7 +116,12 @@ export default function ClientesPage() {
     }
 
     const clientesFiltrados = clientes.filter(c => c.nombre.toLowerCase().includes(busqueda.toLowerCase()) || (c.telefono && c.telefono.includes(busqueda)));
-    const totalInvertido = historialCitas.reduce((acc, cita) => acc + (cita.precio || 0), 0);
+    const totalInvertido = historialCitas.reduce((acc, cita) => {
+        if (cita.estado === 'completada') {
+            return acc + (cita.precio || 0);
+        }
+        return acc;
+    }, 0);
 
     return (
         <div className="flex min-h-screen bg-slate-50 relative overflow-hidden">
@@ -127,9 +135,9 @@ export default function ClientesPage() {
                 </header>
 
                 {toast && (
-                    <div className={`fixed bottom-8 right-8 z-[150] p-4 rounded-xl shadow-2xl border flex items-center gap-3 animate-in slide-in-from-bottom-5 duration-300 ${toast.tipo === "error"
-                            ? "bg-white text-red-600 border-red-100 shadow-red-100/50"
-                            : "bg-white text-emerald-600 border-emerald-100 shadow-emerald-100/50"
+                    <div className={`fixed bottom-8 right-8 z-150 p-4 rounded-xl shadow-2xl border flex items-center gap-3 animate-in slide-in-from-bottom-5 duration-300 ${toast.tipo === "error"
+                        ? "bg-white text-red-600 border-red-100 shadow-red-100/50"
+                        : "bg-white text-emerald-600 border-emerald-100 shadow-emerald-100/50"
                         }`}>
                         <div className={`p-2 rounded-lg ${toast.tipo === "error" ? "bg-red-50" : "bg-emerald-50"}`}>
                             {toast.tipo === "error" ? <AlertCircle size={20} /> : <CheckCircle2 size={20} />}
@@ -138,9 +146,8 @@ export default function ClientesPage() {
                     </div>
                 )}
 
-                {/* MODAL NUEVO CLIENTE EFICIENTE */}
                 {isModalOpen && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+                    <div className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
                         <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
                             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                                 <h3 className="text-xl font-black text-slate-800">Ficha de Cliente</h3>
@@ -192,9 +199,8 @@ export default function ClientesPage() {
                     </div>
                 )}
 
-                {/* MODAL DE CONFIRMACIÓN DE BORRADO DE CLIENTE */}
                 {clienteAEliminar && (
-                    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="fixed inset-0 z-200 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
                         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
                             <div className="p-6 text-center flex flex-col items-center">
                                 <div className="bg-red-50 text-red-500 p-4 rounded-full mb-4">
@@ -206,15 +212,15 @@ export default function ClientesPage() {
                                 </p>
                             </div>
                             <div className="flex border-t border-slate-100">
-                                <button 
-                                    onClick={() => setClienteAEliminar(null)} 
+                                <button
+                                    onClick={() => setClienteAEliminar(null)}
                                     className="flex-1 py-4 text-sm font-bold text-slate-500 hover:bg-slate-50 transition-colors"
                                 >
                                     Cancelar
                                 </button>
                                 <div className="w-px bg-slate-100"></div>
-                                <button 
-                                    onClick={confirmarBorrado} 
+                                <button
+                                    onClick={confirmarBorrado}
                                     className="flex-1 py-4 text-sm font-bold text-red-600 hover:bg-red-50 transition-colors"
                                 >
                                     Sí, eliminar
@@ -225,7 +231,7 @@ export default function ClientesPage() {
                 )}
 
                 {/* HISTORIAL SLIDE-OVER */}
-                <div className={`fixed inset-y-0 right-0 w-full md:w-[450px] bg-white shadow-2xl z-[60] transform transition-transform duration-300 ease-in-out border-l border-slate-200 flex flex-col ${clienteDetalle ? "translate-x-0" : "translate-x-full"}`}>
+                <div className={`fixed inset-y-0 right-0 w-full md:w-112.5 bg-white shadow-2xl z-60 transform transition-transform duration-300 ease-in-out border-l border-slate-200 flex flex-col ${clienteDetalle ? "translate-x-0" : "translate-x-full"}`}>
                     {clienteDetalle && (
                         <>
                             <header className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
@@ -251,7 +257,7 @@ export default function ClientesPage() {
                                     <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
                                         <History className="text-indigo-600 mb-2" size={20} />
                                         <p className="text-xs font-bold text-indigo-800 uppercase">Visitas</p>
-                                        <p className="text-2xl font-black text-indigo-700">{historialCitas.length}</p>
+                                        <p className="text-2xl font-black text-indigo-700">{historialCitas.filter(c => c.estado !== 'cancelada').length}</p>
                                     </div>
                                 </div>
 
@@ -267,7 +273,7 @@ export default function ClientesPage() {
                                     <textarea
                                         value={notasEditables}
                                         onChange={(e) => setNotasEditables(e.target.value)}
-                                        className="w-full bg-amber-50/50 border border-amber-100 p-4 rounded-xl text-sm text-slate-800 outline-none focus:ring-2 focus:ring-amber-200 min-h-[100px] resize-none italic"
+                                        className="w-full bg-amber-50/50 border border-amber-100 p-4 rounded-xl text-sm text-slate-800 outline-none focus:ring-2 focus:ring-amber-200 min-h-25 resize-none italic"
                                         placeholder="Añade aquí detalles importantes sobre el cliente..."
                                     />
                                 </div>
@@ -284,13 +290,35 @@ export default function ClientesPage() {
                                         ) : (
                                             historialCitas.map((cita) => (
                                                 <div key={cita.id} className="relative pl-6 border-l-2 border-slate-100 pb-2">
-                                                    <div className="absolute -left-[9px] top-0 w-4 h-4 bg-white border-2 border-indigo-500 rounded-full" />
-                                                    <div className="bg-white border border-slate-100 p-3 rounded-xl shadow-sm">
+                                                    <div className={`absolute -left-2.25 top-0 w-4 h-4 bg-white border-2 rounded-full ${cita.estado === 'cancelada' ? 'border-red-400' : 'border-indigo-500'}`} />
+                                                    <div className={`bg-white border p-3 rounded-xl shadow-sm ${cita.estado === 'cancelada' ? 'border-red-100 bg-red-50/30' : 'border-slate-100'}`}>
                                                         <div className="flex justify-between items-start mb-1">
-                                                            <span className="text-sm font-bold text-slate-800">{cita.servicio}</span>
-                                                            <span className="text-xs font-black text-emerald-600">{cita.precio}€</span>
+                                                            
+                                                            <div className="flex items-center gap-2">
+                                                                <span className={`text-sm font-bold ${cita.estado === 'cancelada' ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
+                                                                    {cita.servicio}
+                                                                </span>
+                                                                
+                                                                {/* BOTONES DE REVERSIÓN EN EL CRM */}
+                                                                {cita.estado === 'cancelada' && (
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="bg-red-100 text-red-600 text-[9px] px-2 py-0.5 rounded-full uppercase font-black tracking-widest">Cancelada</span>
+                                                                        <button onClick={() => cambiarEstadoCita(cita.id, 'pendiente')} className="text-[10px] text-indigo-500 hover:text-indigo-700 font-bold underline transition-colors">Restaurar</button>
+                                                                    </div>
+                                                                )}
+                                                                {cita.estado === 'completada' && (
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="bg-emerald-100 text-emerald-600 text-[9px] px-2 py-0.5 rounded-full uppercase font-black tracking-widest">Cobrada</span>
+                                                                        <button onClick={() => cambiarEstadoCita(cita.id, 'pendiente')} className="text-[10px] text-amber-500 hover:text-amber-700 font-bold underline transition-colors">Deshacer</button>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            
+                                                            <span className={`text-xs font-black ${cita.estado === 'cancelada' ? 'text-slate-300 line-through' : 'text-emerald-600'}`}>
+                                                                {cita.precio}€
+                                                            </span>
                                                         </div>
-                                                        <div className="flex justify-between items-center text-[11px] text-slate-500 font-medium">
+                                                        <div className="flex justify-between items-center text-[11px] text-slate-500 font-medium mt-2">
                                                             <span className="flex items-center gap-1"><CalendarIcon size={10} /> {format(parseISO(cita.fecha_inicio), "d MMM, yyyy - HH:mm'h'", { locale: es })}</span>
                                                             <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-600 uppercase">{cita.profesionales?.nombre}</span>
                                                         </div>

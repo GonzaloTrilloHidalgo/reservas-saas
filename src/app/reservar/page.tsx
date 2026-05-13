@@ -30,6 +30,7 @@ export default function PaginaReservaPublica() {
   // DATOS DE LA BASE DE DATOS
   const [servicios, setServicios] = useState<any[]>([]);
   const [profesionales, setProfesionales] = useState<any[]>([]);
+  const [ajustesIdActual, setAjustesIdActual] = useState<number | null>(null); // <-- Estado para el ID del negocio
   const [horaApertura, setHoraApertura] = useState(9);
   const [horaCierre, setHoraCierre] = useState(20);
   const [inicioDescanso, setInicioDescanso] = useState(14);
@@ -48,7 +49,7 @@ export default function PaginaReservaPublica() {
   const [mostrarPrefijos, setMostrarPrefijos] = useState(false);
   const prefijosRef = useRef<HTMLDivElement>(null);
   
-  // NUEVOS ESTADOS PARA AUTOCOMPLETAR Y FESTIVOS
+  // ESTADOS PARA AUTOCOMPLETAR Y FESTIVOS
   const [telefonoVerificado, setTelefonoVerificado] = useState(false);
   const [buscandoCliente, setBuscandoCliente] = useState(false);
   const [clienteConocido, setClienteConocido] = useState(false);
@@ -75,11 +76,12 @@ export default function PaginaReservaPublica() {
     async function cargarDatos() {
       const { data: s } = await supabase.from("servicios").select("*").is("fecha_borrado", null).order("nombre");
       const { data: p } = await supabase.from("profesionales").select("*").is("fecha_borrado", null).order("nombre");
-      const { data: a } = await supabase.from("ajustes").select("*").single();
+      const { data: a } = await supabase.from("ajustes").select("*").limit(1).single();
       
       if (s) setServicios(s);
       if (p) setProfesionales(p);
       if (a) { 
+        setAjustesIdActual(a.id); // <-- Guardamos el ID del negocio
         setHoraApertura(a.hora_apertura); 
         setHoraCierre(a.hora_cierre); 
         setInicioDescanso(a.hora_inicio_descanso || 14);
@@ -92,14 +94,16 @@ export default function PaginaReservaPublica() {
     cargarDatos();
   }, []);
 
-  // COMPROBAR FESTIVOS CADA VEZ QUE CAMBIA LA FECHA
+  // COMPROBAR FESTIVOS CADA VEZ QUE CAMBIA LA FECHA (MULTI-TENANT)
   useEffect(() => {
     async function comprobarCierre() {
-      if (!fecha) return;
+      if (!fecha || !ajustesIdActual) return; // <-- Esperamos a tener el ID del negocio
+      
       const { data } = await supabase
         .from("cierres_negocio")
         .select("motivo")
         .eq("fecha", fecha)
+        .eq("ajustes_id", ajustesIdActual) // <-- FILTRO MULTI-TENANT
         .is("fecha_borrado", null)
         .maybeSingle();
 
@@ -112,7 +116,7 @@ export default function PaginaReservaPublica() {
       }
     }
     comprobarCierre();
-  }, [fecha]);
+  }, [fecha, ajustesIdActual]); // <-- Añadimos dependencias
 
   // RECALCULAR HUECOS CUANDO CAMBIA LA FECHA O EL PROFESIONAL
   useEffect(() => {
@@ -253,7 +257,8 @@ export default function PaginaReservaPublica() {
         profesional_id: profesionalSeleccionado.id,
         fecha_inicio: start,
         fecha_fin: end,
-        precio: servicioSeleccionado.precio || 0
+        precio: servicioSeleccionado.precio || 0,
+        estado: 'pendiente' // <-- Aseguramos que la cita nazca como 'pendiente'
       }]);
 
       if (errorCita) throw errorCita;

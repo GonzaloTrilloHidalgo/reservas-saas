@@ -54,6 +54,7 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
   const [cargandoHuecos, setCargandoHuecos] = useState(false);
 
   // ESTADOS DE CONFIGURACIÓN
+  const [ajustesIdActual, setAjustesIdActual] = useState<number | null>(null); // <-- Nuevo estado para el ID del negocio
   const [horaApertura, setHoraApertura] = useState(9);
   const [horaCierre, setHoraCierre] = useState(20);
   const [inicioDescanso, setInicioDescanso] = useState(14);
@@ -89,12 +90,13 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
       const { data: p } = await supabase.from("profesionales").select("id, nombre").is("fecha_borrado", null).order("nombre");
       const { data: s } = await supabase.from("servicios").select("id, nombre, precio").is("fecha_borrado", null).order("nombre");
       const { data: c } = await supabase.from("clientes").select("id, nombre, telefono").is("fecha_borrado", null).order("nombre");
-      const { data: a } = await supabase.from("ajustes").select("*").single();
+      const { data: a } = await supabase.from("ajustes").select("*").limit(1).single();
       
       if (p) { setProfesionales(p); setProfesionalId(p[0]?.id || ""); }
       if (s) setServicios(s);
       if (c) setClientesCRM(c);
       if (a) { 
+        setAjustesIdActual(a.id); // Guardamos el ID para usarlo luego en los festivos
         setHoraApertura(a.hora_apertura); 
         setHoraCierre(a.hora_cierre); 
         setInicioDescanso(a.hora_inicio_descanso);
@@ -104,14 +106,15 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
     cargarDatosBase();
   }, []);
 
-  // COMPROBAR SI EL DÍA SELECCIONADO ES FESTIVO
+  // COMPROBAR SI EL DÍA SELECCIONADO ES FESTIVO (MULTI-TENANT)
   useEffect(() => {
     async function comprobarCierre() {
-      if (!fecha) return;
+      if (!fecha || !ajustesIdActual) return; // Esperamos a tener fecha y negocio
       const { data } = await supabase
         .from("cierres_negocio")
         .select("motivo")
         .eq("fecha", fecha)
+        .eq("ajustes_id", ajustesIdActual) // <-- FILTRO MULTI-TENANT
         .is("fecha_borrado", null)
         .maybeSingle();
 
@@ -124,7 +127,7 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
       }
     }
     if (open) comprobarCierre();
-  }, [fecha, open]);
+  }, [fecha, open, ajustesIdActual]); // Añadimos ajustesIdActual a las dependencias
 
   useEffect(() => {
     if (open && fecha && profesionalId && duracionMinutos) {
@@ -152,7 +155,7 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
       .from("citas")
       .select("fecha_inicio, fecha_fin")
       .eq("profesional_id", profesionalId)
-      .is("deleted_at", null)
+      .is("fecha_borrado", null) // <-- Ajustado para usar la convención de borrado lógico
       .gte("fecha_inicio", inicioDia)
       .lte("fecha_inicio", finDia);
 
@@ -231,7 +234,8 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
         profesional_id: profesionalId,
         fecha_inicio: start,
         fecha_fin: end,
-        precio: parseFloat(String(precioActual)) || 0
+        precio: parseFloat(String(precioActual)) || 0,
+        estado: 'pendiente' // <-- Nos aseguramos de que nace como pendiente
       }]);
 
       setOpen(false);
@@ -306,7 +310,7 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
                           <img src={`https://flagcdn.com/w20/${infoP.iso}.png`} className="w-5 rounded-sm" alt="flag" /> {clientePrefijo}
                         </button>
                         {mostrarPrefijos && (
-                          <div className="absolute top-14 left-0 z-[60] w-52 bg-white border border-slate-100 rounded-xl shadow-xl max-h-48 overflow-y-auto p-1">
+                          <div className="absolute top-14 left-0 z-60 w-52 bg-white border border-slate-100 rounded-xl shadow-xl max-h-48 overflow-y-auto p-1">
                             {PREFIJOS.map(p => (
                               <button key={p.iso} type="button" onClick={() => {setClientePrefijo(p.code); setMostrarPrefijos(false);}} className="w-full flex items-center gap-3 px-3 py-2 hover:bg-slate-50 rounded-lg text-xs font-bold text-slate-600">
                                 <img src={`https://flagcdn.com/w20/${p.iso}.png`} className="w-4" alt={p.country} /> <span className="truncate">{p.country}</span> <span className="ml-auto text-slate-400">{p.code}</span>
@@ -364,8 +368,7 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
           </div>
 
           {/* PANEL DERECHO: SELECTOR DE HORAS */}
-          {/* AJUSTE RESPONSIVE: En móvil ya no está anclado a la derecha, fluye hacia abajo. Se le quita la altura fija. */}
-          <div className="w-full md:w-[340px] bg-slate-50 flex flex-col shrink-0 md:border-l border-slate-200 border-t md:border-t-0">
+          <div className="w-full md:w-85 bg-slate-50 flex flex-col shrink-0 md:border-l border-slate-200 border-t md:border-t-0">
             <div className="p-5 md:p-8 flex-1 flex flex-col md:overflow-hidden h-full">
               
               <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest mb-4 flex justify-between items-center shrink-0">

@@ -20,6 +20,7 @@ export default function ConfiguracionPage() {
   const [cierre, setCierre] = useState(20);
   const [inicioDescanso, setInicioDescanso] = useState(14);
   const [finDescanso, setFinDescanso] = useState(15);
+  const [negocioId, setNegocioId] = useState<string | null>(null);
 
   // Estados de Festivos
   const [festivos, setFestivos] = useState<any[]>([]);
@@ -31,10 +32,15 @@ export default function ConfiguracionPage() {
   }, []);
 
   async function cargarDatos() {
-    // 1. Cargar Ajustes
-    const { data: adj } = await supabase.from("ajustes").select("*").limit(1).single();
-    if (adj) {
+    // 1. Cargar Ajustes del usuario actual
+    const { data: adj, error: errorAjustes } = await supabase.from("ajustes").select("*").limit(1).single();
+    
+    let currentAjustesId = null;
+
+    if (adj && !errorAjustes) {
+      currentAjustesId = adj.id;
       setAjustesId(adj.id);
+      setNegocioId(adj.negocio_id);
       setNombreNegocio(adj.nombre_negocio);
       setApertura(adj.hora_apertura);
       setCierre(adj.hora_cierre);
@@ -42,13 +48,16 @@ export default function ConfiguracionPage() {
       setFinDescanso(adj.hora_fin_descanso || 15);
     }
 
-    // 2. Cargar Festivos activos
-    const { data: fes } = await supabase
-      .from("cierres_negocio")
-      .select("*")
-      .is("fecha_borrado", null)
-      .order("fecha", { ascending: true });
-    if (fes) setFestivos(fes);
+    // 2. Cargar Festivos activos SOLO de este negocio
+    if (currentAjustesId) {
+      const { data: fes } = await supabase
+        .from("cierres_negocio")
+        .select("*")
+        .eq("ajustes_id", currentAjustesId) // <-- FILTRO MULTI-TENANT
+        .is("fecha_borrado", null)
+        .order("fecha", { ascending: true });
+      if (fes) setFestivos(fes);
+    }
 
     setLoading(false);
   }
@@ -59,26 +68,55 @@ export default function ConfiguracionPage() {
   };
 
   async function guardarAjustes() {
-    if (!ajustesId) return;
-    setIsSaving(true);
-    const { error } = await supabase.from("ajustes").update({
+  if (!ajustesId || !negocioId) return;
+  setIsSaving(true);
+
+  // Preparamos las dos actualizaciones
+  const actualizarAjustes = supabase
+    .from("ajustes")
+    .update({
       nombre_negocio: nombreNegocio,
       hora_apertura: apertura,
       hora_cierre: cierre,
       hora_inicio_descanso: inicioDescanso,
       hora_fin_descanso: finDescanso,
-    }).eq("id", ajustesId);
+    })
+    .eq("id", ajustesId);
 
-    setIsSaving(false);
-    if (error) mostrarNotificacion("Error: " + error.message, "error");
-    else mostrarNotificacion("Ajustes guardados correctamente", "exito");
+  const actualizarNegocio = supabase
+    .from("negocios")
+    .update({
+      nombre: nombreNegocio, // Sincronizamos el nombre en la tabla maestra
+    })
+    .eq("id", negocioId);
+
+  // Ejecutamos ambas a la vez
+  const [resAjustes, resNegocio] = await Promise.all([
+    actualizarAjustes,
+    actualizarNegocio,
+  ]);
+
+  setIsSaving(false);
+
+  if (resAjustes.error || resNegocio.error) {
+    mostrarNotificacion("Error al sincronizar los datos", "error");
+  } else {
+    mostrarNotificacion("Configuración y nombre de negocio actualizados", "exito");
+    
   }
+}
 
   async function añadirFestivo() {
-    if (!nuevaFechaCierre) return;
+    if (!nuevaFechaCierre || !ajustesId) return; // Nos aseguramos de tener el ID del negocio
+    
     const { error } = await supabase.from("cierres_negocio").insert([
-      { fecha: nuevaFechaCierre, motivo: nuevoMotivo }
+      { 
+        fecha: nuevaFechaCierre, 
+        motivo: nuevoMotivo,
+        ajustes_id: ajustesId // <-- GUARDAMOS EL FESTIVO VINCULADO AL NEGOCIO
+      }
     ]);
+
     if (error) mostrarNotificacion(error.message, "error");
     else {
       setNuevaFechaCierre(""); setNuevoMotivo("");
@@ -181,7 +219,6 @@ export default function ConfiguracionPage() {
             
             <div className="p-4 md:p-8 space-y-6">
               
-              {/* AQUÍ SE HA APLICADO EL PARCHE PARA IPHONE */}
               <div className="flex flex-col md:flex-row gap-4 items-start md:items-end bg-red-50/30 p-4 md:p-5 rounded-2xl border border-red-100 w-full">
                 
                 <div className="w-full md:flex-1 space-y-2 min-w-0">
