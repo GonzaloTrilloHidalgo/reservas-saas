@@ -107,9 +107,28 @@ export default function CalendarView() {
   }, [activeFilter, allEvents]);
 
   const cargarDatosIniciales = async () => {
-    const { data: ajustesData } = await supabase.from("ajustes").select("*").limit(1).single();
+    // 1. IDENTIFICAR AL USUARIO Y SU NEGOCIO
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data: miNegocio } = await supabase
+      .from("negocios")
+      .select("id")
+      .eq("auth_user_id", user.id)
+      .single();
+
+    if (!miNegocio) return;
+    const negocioId = miNegocio.id;
+
+    // 2. CARGAR AJUSTES DE ESTE NEGOCIO
+    const { data: ajustesData } = await supabase
+      .from("ajustes")
+      .select("*")
+      .eq("negocio_id", negocioId)
+      .single();
+
     let apertura = 9, cierre = 20, iniDescanso = 14, finDescanso = 15;
-    let currentAjustesId = null; // <-- Guardamos el ID del negocio
+    let currentAjustesId = null;
 
     if (ajustesData) {
       currentAjustesId = ajustesData.id;
@@ -121,12 +140,21 @@ export default function CalendarView() {
       setHoraCierre(cierre);
     }
 
-    const { data: staffData } = await supabase.from("profesionales").select("nombre").is("fecha_borrado", null).order("nombre");
+    // 3. CARGAR PROFESIONALES DE ESTE NEGOCIO
+    const { data: staffData } = await supabase
+      .from("profesionales")
+      .select("nombre")
+      .eq("negocio_id", negocioId)
+      .is("fecha_borrado", null)
+      .order("nombre");
+      
     if (staffData) setProfesionales(staffData.map(p => p.nombre));
 
+    // 4. CARGAR CITAS DE ESTE NEGOCIO
     const { data: citasData, error } = await supabase
       .from("citas")
       .select(`id, servicio, cliente_nombre, fecha_inicio, fecha_fin, precio, profesionales (nombre, color), clientes (telefono), estado`)
+      .eq("negocio_id", negocioId)
       .is("fecha_borrado", null);
 
     if (error) return console.error("Error al cargar:", error.message);
@@ -154,9 +182,9 @@ export default function CalendarView() {
       setAllEvents(citasFormateadas);
     }
 
+    // 5. CARGAR FESTIVOS DE ESTE NEGOCIO (vinculado a ajustes_id)
     const generadorFondos: CitaCalendario[] = [];
 
-    // <-- MAGIA MULTI-TENANT: Solo pedimos los festivos de ESTE negocio
     if (currentAjustesId) {
       const { data: festivosData } = await supabase
         .from("cierres_negocio")

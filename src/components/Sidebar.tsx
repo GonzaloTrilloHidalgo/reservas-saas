@@ -30,12 +30,25 @@ export default function Sidebar() {
       setNombreNegocio(nombreGuardado);
     }
 
-    // 2. VERIFICACIÓN: Consultamos a Supabase en segundo plano
+    // 2. VERIFICACIÓN SAAS: Consultamos a Supabase en segundo plano filtrando por usuario
     async function obtenerNombre() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Buscamos el ID del negocio del usuario actual
+      const { data: miNegocio } = await supabase
+        .from("negocios")
+        .select("id")
+        .eq("auth_user_id", user.id)
+        .single();
+
+      if (!miNegocio) return;
+
+      // Buscamos los ajustes de ese negocio específico
       const { data, error } = await supabase
         .from("ajustes")
         .select("nombre_negocio")
-        .limit(1)
+        .eq("negocio_id", miNegocio.id) // <-- FILTRO MULTI-TENANT
         .single();
 
       if (data && data.nombre_negocio) {
@@ -44,6 +57,7 @@ export default function Sidebar() {
         localStorage.setItem("velo_nombre_negocio", data.nombre_negocio);
       }
     }
+    
     obtenerNombre();
   }, []);
 
@@ -118,7 +132,7 @@ export default function Sidebar() {
               className="flex items-center justify-center gap-2 px-4 py-3 w-full rounded-lg text-sm font-bold text-red-600 bg-red-50 hover:bg-red-100 transition-colors border border-red-100"
             >
               <LogOut size={18} />
-              Cerrar sesión
+               Cerrar sesión
             </button>
           </div>
 

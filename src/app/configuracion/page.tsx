@@ -32,77 +32,97 @@ export default function ConfiguracionPage() {
   }, []);
 
   async function cargarDatos() {
-    // 1. Cargar Ajustes del usuario actual
-    const { data: adj, error: errorAjustes } = await supabase.from("ajustes").select("*").limit(1).single();
+  // 1. Obtener el usuario que tiene la sesión iniciada actualmente
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (!user) return;
+
+  // 2. Buscar el ID del negocio que pertenece a este usuario
+  const { data: miNegocio } = await supabase
+    .from("negocios")
+    .select("id")
+    .eq("auth_user_id", user.id)
+    .single();
+
+  if (!miNegocio) return;
+
+  // 3. Ahora sí, cargar los Ajustes filtrando por ESE negocio específico
+  const { data: adj, error: errorAjustes } = await supabase
+    .from("ajustes")
+    .select("*")
+    .eq("negocio_id", miNegocio.id) // <-- EL FILTRO MÁGICO
+    .single();
+
+  if (adj && !errorAjustes) {
+    setAjustesId(adj.id);
+    setNegocioId(adj.negocio_id);
+    setNombreNegocio(adj.nombre_negocio);
+    setApertura(adj.hora_apertura);
+    setCierre(adj.hora_cierre);
+    setInicioDescanso(adj.hora_inicio_descanso || 14);
+    setFinDescanso(adj.hora_fin_descanso || 15);
     
-    let currentAjustesId = null;
-
-    if (adj && !errorAjustes) {
-      currentAjustesId = adj.id;
-      setAjustesId(adj.id);
-      setNegocioId(adj.negocio_id);
-      setNombreNegocio(adj.nombre_negocio);
-      setApertura(adj.hora_apertura);
-      setCierre(adj.hora_cierre);
-      setInicioDescanso(adj.hora_inicio_descanso || 14);
-      setFinDescanso(adj.hora_fin_descanso || 15);
-    }
-
-    // 2. Cargar Festivos activos SOLO de este negocio
-    if (currentAjustesId) {
-      const { data: fes } = await supabase
-        .from("cierres_negocio")
-        .select("*")
-        .eq("ajustes_id", currentAjustesId) // <-- FILTRO MULTI-TENANT
-        .is("fecha_borrado", null)
-        .order("fecha", { ascending: true });
-      if (fes) setFestivos(fes);
-    }
-
-    setLoading(false);
+    // Una vez tenemos el ajustesId, cargamos sus festivos
+    cargarFestivos(adj.id);
   }
 
+  setLoading(false);
+}
+
+// Separar la carga de festivos para que sea más limpio
+async function cargarFestivos(currentAjustesId: number) {
+  const { data: fes } = await supabase
+    .from("cierres_negocio")
+    .select("*")
+    .eq("ajustes_id", currentAjustesId)
+    .is("fecha_borrado", null)
+    .order("fecha", { ascending: true });
+    
+  if (fes) setFestivos(fes);
+}
   const mostrarNotificacion = (mensaje: string, tipo: "error" | "exito") => {
     setToast({ mensaje, tipo });
     setTimeout(() => setToast(null), 3000);
   };
 
   async function guardarAjustes() {
-  if (!ajustesId || !negocioId) return;
+  if (!negocioId) return; // ajustesId puede ser nulo la primera vez si usamos upsert
   setIsSaving(true);
 
-  // Preparamos las dos actualizaciones
-  const actualizarAjustes = supabase
-    .from("ajustes")
-    .update({
-      nombre_negocio: nombreNegocio,
-      hora_apertura: apertura,
-      hora_cierre: cierre,
-      hora_inicio_descanso: inicioDescanso,
-      hora_fin_descanso: finDescanso,
-    })
-    .eq("id", ajustesId);
+  try {
+    // .upsert detecta si la fila existe por la Primary Key (id) o una Unique Constraint
+    const { error: errorAjustes } = await supabase
+      .from("ajustes")
+      .upsert({
+        // Si ajustesId existe, lo usamos para actualizar la fila exacta
+        // Si es nulo, Supabase creará una nueva vinculada al negocioId
+        ...(ajustesId ? { id: ajustesId } : {}), 
+        negocio_id: negocioId,
+        nombre_negocio: nombreNegocio,
+        hora_apertura: Number(apertura),
+        hora_cierre: Number(cierre),
+        hora_inicio_descanso: Number(inicioDescanso),
+        hora_fin_descanso: Number(finDescanso),
+      });
 
-  const actualizarNegocio = supabase
-    .from("negocios")
-    .update({
-      nombre: nombreNegocio, // Sincronizamos el nombre en la tabla maestra
-    })
-    .eq("id", negocioId);
+    if (errorAjustes) throw errorAjustes;
 
-  // Ejecutamos ambas a la vez
-  const [resAjustes, resNegocio] = await Promise.all([
-    actualizarAjustes,
-    actualizarNegocio,
-  ]);
+    const { error: errorNegocio } = await supabase
+      .from("negocios")
+      .update({ nombre: nombreNegocio })
+      .eq("id", negocioId);
 
-  setIsSaving(false);
+    if (errorNegocio) throw errorNegocio;
 
-  if (resAjustes.error || resNegocio.error) {
-    mostrarNotificacion("Error al sincronizar los datos", "error");
-  } else {
-    mostrarNotificacion("Configuración y nombre de negocio actualizados", "exito");
+    mostrarNotificacion("Configuración guardada correctamente", "exito");
     
+    // Volvemos a cargar los datos para obtener el ajustesId si era nuevo
+    cargarDatos();
+
+  } catch (error: any) {
+    mostrarNotificacion(error.message, "error");
+  } finally {
+    setIsSaving(false);
   }
 }
 

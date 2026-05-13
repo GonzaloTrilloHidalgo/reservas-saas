@@ -1,18 +1,18 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { format, addMinutes, parseISO } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import { supabase } from "@/lib/supabase";
+import { use } from "react"; 
 import { 
-  Scissors, CalendarDays, Clock, User, Phone, 
+  CalendarDays, Clock, User, Phone, 
   ChevronRight, ArrowLeft, CheckCircle2, Ban 
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 
-// PREFIJOS INTERNACIONALES
 const PREFIJOS = [
   { iso: "es", code: "+34", country: "España" },
   { iso: "mx", code: "+52", country: "México" },
@@ -23,14 +23,22 @@ const PREFIJOS = [
   { iso: "us", code: "+1", country: "EE.UU." }
 ];
 
-export default function PaginaReservaPublica() {
+export default function PaginaReservaPublica({ params }: { params: Promise<{ slug: string }> }) {
+  const resolvedParams = use(params);
+  const slugDelNegocio = resolvedParams.slug; 
+
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [negocioNoEncontrado, setNegocioNoEncontrado] = useState(false);
+
+  // IDENTIFICADORES MULTI-TENANT (SaaS)
+  const [negocioIdActual, setNegocioIdActual] = useState<string | null>(null);
+  const [ajustesIdActual, setAjustesIdActual] = useState<number | null>(null);
+  const [nombreNegocioVisual, setNombreNegocioVisual] = useState("");
 
   // DATOS DE LA BASE DE DATOS
   const [servicios, setServicios] = useState<any[]>([]);
   const [profesionales, setProfesionales] = useState<any[]>([]);
-  const [ajustesIdActual, setAjustesIdActual] = useState<number | null>(null); // <-- Estado para el ID del negocio
   const [horaApertura, setHoraApertura] = useState(9);
   const [horaCierre, setHoraCierre] = useState(20);
   const [inicioDescanso, setInicioDescanso] = useState(14);
@@ -60,7 +68,6 @@ export default function PaginaReservaPublica() {
   const [huecosDisponibles, setHuecosDisponibles] = useState<{ hora: string; ocupado: boolean; motivo?: string }[]>([]);
   const [cargandoHuecos, setCargandoHuecos] = useState(false);
 
-  // CERRAR DROPDOWN AL HACER CLICK FUERA
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (prefijosRef.current && !prefijosRef.current.contains(event.target as Node)) {
@@ -71,39 +78,56 @@ export default function PaginaReservaPublica() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // CARGAR DATOS INICIALES
+  // 1. CARGA INICIAL: BUSCAMOS EL NEGOCIO POR SLUG
   useEffect(() => {
     async function cargarDatos() {
-      const { data: s } = await supabase.from("servicios").select("*").is("fecha_borrado", null).order("nombre");
-      const { data: p } = await supabase.from("profesionales").select("*").is("fecha_borrado", null).order("nombre");
-      const { data: a } = await supabase.from("ajustes").select("*").limit(1).single();
+      // Obtenemos el Negocio a través de la URL (slug)
+      const { data: n, error: errN } = await supabase
+        .from("negocios")
+        .select("id, nombre")
+        .eq("slug", slugDelNegocio)
+        .single();
       
-      if (s) setServicios(s);
-      if (p) setProfesionales(p);
+      if (errN || !n) {
+        setNegocioNoEncontrado(true);
+        return;
+      }
+
+      setNegocioIdActual(n.id);
+      setNombreNegocioVisual(n.nombre);
+
+      // Cargamos los ajustes específicos de ESE negocio
+      const { data: a } = await supabase.from("ajustes").select("*").eq("negocio_id", n.id).single();
       if (a) { 
-        setAjustesIdActual(a.id); // <-- Guardamos el ID del negocio
+        setAjustesIdActual(a.id);
         setHoraApertura(a.hora_apertura); 
         setHoraCierre(a.hora_cierre); 
         setInicioDescanso(a.hora_inicio_descanso || 14);
         setFinDescanso(a.hora_fin_descanso || 15);
       }
+
+      // Cargamos Servicios y Profesionales vinculados a ESE negocio
+      const { data: s } = await supabase.from("servicios").select("*").eq("negocio_id", n.id).is("fecha_borrado", null).order("nombre");
+      const { data: p } = await supabase.from("profesionales").select("*").eq("negocio_id", n.id).is("fecha_borrado", null).order("nombre");
       
-      // Poner la fecha de hoy por defecto (formato YYYY-MM-DD)
+      if (s) setServicios(s);
+      if (p) setProfesionales(p);
+      
       setFecha(new Date().toISOString().split("T")[0]);
     }
     cargarDatos();
-  }, []);
+  }, [slugDelNegocio]);
 
-  // COMPROBAR FESTIVOS CADA VEZ QUE CAMBIA LA FECHA (MULTI-TENANT)
+  // 2. COMPROBAR FESTIVOS (Con el ID de Ajustes de este negocio)
   useEffect(() => {
     async function comprobarCierre() {
-      if (!fecha || !ajustesIdActual) return; // <-- Esperamos a tener el ID del negocio
+      if (!fecha || !ajustesIdActual) return; 
       
       const { data } = await supabase
         .from("cierres_negocio")
         .select("motivo")
         .eq("fecha", fecha)
-        .eq("ajustes_id", ajustesIdActual) // <-- FILTRO MULTI-TENANT
+        .eq("ajustes_id", ajustesIdActual)
         .is("fecha_borrado", null)
         .maybeSingle();
 
@@ -116,9 +140,9 @@ export default function PaginaReservaPublica() {
       }
     }
     comprobarCierre();
-  }, [fecha, ajustesIdActual]); // <-- Añadimos dependencias
+  }, [fecha, ajustesIdActual]);
 
-  // RECALCULAR HUECOS CUANDO CAMBIA LA FECHA O EL PROFESIONAL
+  // 3. CALCULAR HUECOS
   useEffect(() => {
     if (fecha && profesionalSeleccionado && servicioSeleccionado) {
       calcularHuecos();
@@ -133,6 +157,7 @@ export default function PaginaReservaPublica() {
     const inicioDia = `${fecha}T00:00:00Z`;
     const finDia = `${fecha}T23:59:59Z`;
 
+    // Buscamos solo las citas del profesional seleccionado
     const { data: citasExistentes } = await supabase
       .from("citas")
       .select("fecha_inicio, fecha_fin")
@@ -146,12 +171,11 @@ export default function PaginaReservaPublica() {
     const esHoy = fecha === ahora.toISOString().split("T")[0];
 
     for (let h = horaApertura; h < horaCierre; h++) {
-      for (let m of ["00", "30"]) { // Intervalos de 30 mins
+      for (let m of ["00", "30"]) { 
         const horaHito = `${String(h).padStart(2, "0")}:${m}`;
         const inicioCita = new Date(`${fecha}T${horaHito}:00`);
         const finCita = new Date(inicioCita.getTime() + duracion * 60000);
 
-        // Si es hoy, ocultamos las horas que ya han pasado
         if (esHoy && inicioCita < ahora) continue;
 
         const horaFinFraccion = finCita.getHours() + (finCita.getMinutes() / 60);
@@ -178,15 +202,16 @@ export default function PaginaReservaPublica() {
   };
 
   const verificarTelefono = async () => {
-    if (!telefono || telefono.length < 6) return;
+    if (!telefono || telefono.length < 6 || !negocioIdActual) return;
     setBuscandoCliente(true);
 
     try {
       const telFinal = `${prefijo}${telefono.replace(/\s+/g, "")}`;
       
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from("clientes")
         .select("nombre")
+        .eq("negocio_id", negocioIdActual) // Solo buscamos clientes de ESTE negocio
         .is("fecha_borrado", null)
         .eq("telefono", telFinal);
 
@@ -200,7 +225,6 @@ export default function PaginaReservaPublica() {
       
       setTelefonoVerificado(true);
     } catch (error) {
-      console.error("Error al verificar teléfono", error);
       setTelefonoVerificado(true); 
     } finally {
       setBuscandoCliente(false);
@@ -208,75 +232,90 @@ export default function PaginaReservaPublica() {
   };
 
   const confirmarReserva = async () => {
-    if (!nombre || !telefono || !horaSeleccionada) return;
+    if (!nombre || !telefono || !horaSeleccionada || !negocioIdActual) return;
     setIsSubmitting(true);
 
     try {
       const telFinal = `${prefijo}${telefono.replace(/\s+/g, "")}`;
       let clienteId = null;
 
-      const { data: clientesExistentes, error: errorBusqueda } = await supabase
+      const { data: clientesExistentes } = await supabase
         .from("clientes")
         .select("id, telefono, nombre")
+        .eq("negocio_id", negocioIdActual)
         .is("fecha_borrado", null)
         .eq("telefono", telFinal);
 
-      if (errorBusqueda) throw errorBusqueda;
-
       if (clientesExistentes && clientesExistentes.length > 0) {
         clienteId = clientesExistentes[0].id;
-        
         if (clientesExistentes[0].nombre !== nombre.trim()) {
-          await supabase
-            .from("clientes")
-            .update({ nombre: nombre.trim() })
-            .eq("id", clienteId);
+          await supabase.from("clientes").update({ nombre: nombre.trim() }).eq("id", clienteId);
         }
       } else {
-        const { data: nuevoCliente, error: errorCreacion } = await supabase
+        // Al ser portal público, INYECTAMOS explícitamente el negocio_id al crear el cliente
+        const { data: nuevoCliente, error: errC } = await supabase
           .from("clientes")
-          .insert([{ nombre: nombre.trim(), telefono: telFinal }])
+          .insert([{ 
+            nombre: nombre.trim(), 
+            telefono: telFinal,
+            negocio_id: negocioIdActual
+          }])
           .select("id"); 
 
-        if (errorCreacion) throw errorCreacion;
+        if (errC) throw errC;
         if (nuevoCliente && nuevoCliente.length > 0) {
           clienteId = nuevoCliente[0].id;
         }
       }
 
-      if (!clienteId) throw new Error("No se pudo obtener ni crear el ID del cliente.");
+      if (!clienteId) throw new Error("No se pudo obtener el ID del cliente.");
 
       const duracionFinal = servicioSeleccionado.duracion || 60;
       const start = new Date(`${fecha}T${horaSeleccionada}:00`).toISOString();
       const end = new Date(new Date(start).getTime() + duracionFinal * 60000).toISOString();
 
+      // Creamos la cita asignándola al negocio actual
       const { error: errorCita } = await supabase.from("citas").insert([{
         cliente_nombre: nombre.trim(),
         cliente_id: clienteId,
         servicio: servicioSeleccionado.nombre,
         profesional_id: profesionalSeleccionado.id,
+        negocio_id: negocioIdActual,
         fecha_inicio: start,
         fecha_fin: end,
         precio: servicioSeleccionado.precio || 0,
-        estado: 'pendiente' // <-- Aseguramos que la cita nazca como 'pendiente'
+        estado: 'pendiente' 
       }]);
 
       if (errorCita) throw errorCita;
 
       setStep(4); 
     } catch (error) {
-      console.error("Error GENERAL en confirmarReserva:", error);
-      alert("Hubo un problema al confirmar tu reserva. Inténtalo de nuevo. Revisa la consola.");
+      console.error(error);
+      alert("Hubo un problema al confirmar tu reserva.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  // VISTA SI NO ENCUENTRA LA URL (SLUG)
+  if (negocioNoEncontrado) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="bg-white p-8 rounded-3xl shadow-xl text-center max-w-md border border-slate-200">
+          <Ban size={48} className="mx-auto text-slate-300 mb-4" />
+          <h1 className="text-xl font-black text-slate-800 mb-2">Página no encontrada</h1>
+          <p className="text-slate-500 text-sm">La dirección de reservas a la que intentas acceder no existe en Velo Engine.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // RENDER PRINCIPAL DEL WIZARD
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-3xl shadow-xl shadow-slate-200/50 overflow-hidden flex flex-col">
         
-        {/* CABECERA WIZARD */}
         {step < 4 && (
           <div className="bg-indigo-600 p-6 text-white text-center relative">
             {step > 1 && (
@@ -284,7 +323,7 @@ export default function PaginaReservaPublica() {
                 <ArrowLeft size={20} />
               </button>
             )}
-            <h1 className="text-xl font-black mb-1">Reserva tu cita</h1>
+            <h1 className="text-xl font-black mb-1">{nombreNegocioVisual || "Reserva tu cita"}</h1>
             <p className="text-indigo-100 text-sm font-medium">
               Paso {step} de 3: {step === 1 ? "Servicio" : step === 2 ? "Fecha y Hora" : "Tus Datos"}
             </p>
@@ -295,8 +334,6 @@ export default function PaginaReservaPublica() {
         )}
 
         <div className="p-6 flex-1 overflow-y-auto">
-          
-          {/* PASO 1: SELECCIONAR SERVICIO Y PROFESIONAL */}
           {step === 1 && (
             <div className="space-y-6 animate-in slide-in-from-right-4">
               <div>
@@ -358,7 +395,6 @@ export default function PaginaReservaPublica() {
             </div>
           )}
 
-          {/* PASO 2: FECHA Y HORA */}
           {step === 2 && (
             <div className="space-y-6 animate-in slide-in-from-right-4">
               <div>
@@ -392,7 +428,7 @@ export default function PaginaReservaPublica() {
                     No hay citas disponibles para este día. Prueba con otra fecha.
                   </div>
                 ) : (
-                  <div className="grid grid-cols-3 gap-2 max-h-62.5 overflow-y-auto pr-1 scrollbar-hide">
+                  <div className="grid grid-cols-3 gap-2 max-h-[250px] overflow-y-auto pr-1 scrollbar-hide">
                     {huecosDisponibles.map(slot => (
                       <button
                         key={slot.hora}
@@ -426,7 +462,6 @@ export default function PaginaReservaPublica() {
             </div>
           )}
 
-          {/* PASO 3: DATOS DE CONTACTO */}
           {step === 3 && (
             <div className="space-y-6 animate-in slide-in-from-right-4">
               
@@ -527,7 +562,6 @@ export default function PaginaReservaPublica() {
             </div>
           )}
 
-          {/* PASO 4: ÉXITO */}
           {step === 4 && (
             <div className="text-center py-10 animate-in zoom-in duration-500">
               <div className="w-20 h-20 bg-emerald-100 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6">

@@ -53,8 +53,9 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
   const [huecosDisponibles, setHuecosDisponibles] = useState<{ hora: string; ocupado: boolean; motivo?: string }[]>([]);
   const [cargandoHuecos, setCargandoHuecos] = useState(false);
 
-  // ESTADOS DE CONFIGURACIÓN
-  const [ajustesIdActual, setAjustesIdActual] = useState<number | null>(null); // <-- Nuevo estado para el ID del negocio
+  // ESTADOS DE CONFIGURACIÓN (MULTI-TENANT)
+  const [negocioIdActual, setNegocioIdActual] = useState<string | null>(null);
+  const [ajustesIdActual, setAjustesIdActual] = useState<number | null>(null);
   const [horaApertura, setHoraApertura] = useState(9);
   const [horaCierre, setHoraCierre] = useState(20);
   const [inicioDescanso, setInicioDescanso] = useState(14);
@@ -87,16 +88,32 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
 
   useEffect(() => {
     async function cargarDatosBase() {
-      const { data: p } = await supabase.from("profesionales").select("id, nombre").is("fecha_borrado", null).order("nombre");
-      const { data: s } = await supabase.from("servicios").select("id, nombre, precio").is("fecha_borrado", null).order("nombre");
-      const { data: c } = await supabase.from("clientes").select("id, nombre, telefono").is("fecha_borrado", null).order("nombre");
-      const { data: a } = await supabase.from("ajustes").select("*").limit(1).single();
+      // 1. OBTENER USUARIO ACTUAL Y SU NEGOCIO
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: miNegocio } = await supabase
+        .from("negocios")
+        .select("id")
+        .eq("auth_user_id", user.id)
+        .single();
+
+      if (!miNegocio) return;
+      const negocioId = miNegocio.id;
+      setNegocioIdActual(negocioId);
+
+      // 2. CARGAR DATOS FILTRADOS POR EL NEGOCIO DEL USUARIO
+      const { data: p } = await supabase.from("profesionales").select("id, nombre").eq("negocio_id", negocioId).is("fecha_borrado", null).order("nombre");
+      const { data: s } = await supabase.from("servicios").select("id, nombre, precio").eq("negocio_id", negocioId).is("fecha_borrado", null).order("nombre");
+      const { data: c } = await supabase.from("clientes").select("id, nombre, telefono").eq("negocio_id", negocioId).is("fecha_borrado", null).order("nombre");
+      const { data: a } = await supabase.from("ajustes").select("*").eq("negocio_id", negocioId).single();
       
       if (p) { setProfesionales(p); setProfesionalId(p[0]?.id || ""); }
       if (s) setServicios(s);
       if (c) setClientesCRM(c);
+      
       if (a) { 
-        setAjustesIdActual(a.id); // Guardamos el ID para usarlo luego en los festivos
+        setAjustesIdActual(a.id);
         setHoraApertura(a.hora_apertura); 
         setHoraCierre(a.hora_cierre); 
         setInicioDescanso(a.hora_inicio_descanso);
@@ -109,12 +126,13 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
   // COMPROBAR SI EL DÍA SELECCIONADO ES FESTIVO (MULTI-TENANT)
   useEffect(() => {
     async function comprobarCierre() {
-      if (!fecha || !ajustesIdActual) return; // Esperamos a tener fecha y negocio
+      if (!fecha || !ajustesIdActual) return;
+      
       const { data } = await supabase
         .from("cierres_negocio")
         .select("motivo")
         .eq("fecha", fecha)
-        .eq("ajustes_id", ajustesIdActual) // <-- FILTRO MULTI-TENANT
+        .eq("ajustes_id", ajustesIdActual) // Filtro por los ajustes de este negocio
         .is("fecha_borrado", null)
         .maybeSingle();
 
@@ -127,7 +145,7 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
       }
     }
     if (open) comprobarCierre();
-  }, [fecha, open, ajustesIdActual]); // Añadimos ajustesIdActual a las dependencias
+  }, [fecha, open, ajustesIdActual]);
 
   useEffect(() => {
     if (open && fecha && profesionalId && duracionMinutos) {
@@ -155,7 +173,7 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
       .from("citas")
       .select("fecha_inicio, fecha_fin")
       .eq("profesional_id", profesionalId)
-      .is("fecha_borrado", null) // <-- Ajustado para usar la convención de borrado lógico
+      .is("fecha_borrado", null)
       .gte("fecha_inicio", inicioDia)
       .lte("fecha_inicio", finDia);
 
@@ -208,7 +226,7 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!horaSeleccionada) return setErrorMsg("Selecciona una hora");
+    if (!horaSeleccionada || !negocioIdActual) return setErrorMsg("Faltan datos para crear la cita");
     setIsSubmitting(true);
     
     try {
@@ -217,7 +235,13 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
 
       if (tipo === "cita") {
         if (!finalId) {
-          const { data: n } = await supabase.from("clientes").insert([{ nombre: clienteNombre, telefono: telFinal }]).select("id").single();
+          // Creamos el cliente asociándolo al negocio actual
+          const { data: n } = await supabase.from("clientes").insert([{ 
+            nombre: clienteNombre, 
+            telefono: telFinal,
+            negocio_id: negocioIdActual
+          }]).select("id").single();
+          
           if (n) finalId = n.id;
         } else if (telFinal) {
           await supabase.from("clientes").update({ telefono: telFinal }).eq("id", finalId);
@@ -227,15 +251,17 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
       const start = new Date(`${fecha}T${horaSeleccionada}:00`).toISOString();
       const end = new Date(new Date(start).getTime() + duracionMinutos * 60000).toISOString();
 
+      // Creamos la cita asociándola al negocio actual
       await supabase.from("citas").insert([{
         cliente_nombre: tipo === "cita" ? clienteNombre : "BLOQUEO",
         cliente_id: finalId,
         servicio: tipo === "cita" ? servicios.find(s => s.id == servicioId)?.nombre : "Bloqueo",
         profesional_id: profesionalId,
+        negocio_id: negocioIdActual,
         fecha_inicio: start,
         fecha_fin: end,
         precio: parseFloat(String(precioActual)) || 0,
-        estado: 'pendiente' // <-- Nos aseguramos de que nace como pendiente
+        estado: 'pendiente'
       }]);
 
       setOpen(false);
@@ -258,14 +284,12 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
         </button>
       </DialogTrigger>
 
-      {/* AJUSTE RESPONSIVE: En móvil el h-[90vh] con overflow-auto permite scroll global. En escritorio, altura fija y scroll interno. */}
       <DialogContent className="w-[95vw] max-w-md sm:max-w-4xl bg-white p-0 border-none shadow-2xl overflow-hidden flex flex-col h-[90vh] sm:h-[85vh] rounded-3xl">
         
         <DialogHeader className="p-5 sm:p-6 border-b border-slate-100 shrink-0 bg-white z-10 sticky top-0">
           <DialogTitle className="text-xl sm:text-2xl font-black text-slate-800">Agendar Cita</DialogTitle>
         </DialogHeader>
 
-        {/* AJUSTE RESPONSIVE: En móvil flex-col normal (uno debajo de otro). En ordenador flex-row (dos columnas). */}
         <div className="flex flex-col md:flex-row flex-1 overflow-y-auto md:overflow-hidden relative bg-white">
           
           {/* PANEL IZQUIERDO: FORMULARIO */}
@@ -310,7 +334,7 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
                           <img src={`https://flagcdn.com/w20/${infoP.iso}.png`} className="w-5 rounded-sm" alt="flag" /> {clientePrefijo}
                         </button>
                         {mostrarPrefijos && (
-                          <div className="absolute top-14 left-0 z-60 w-52 bg-white border border-slate-100 rounded-xl shadow-xl max-h-48 overflow-y-auto p-1">
+                          <div className="absolute top-14 left-0 z-50 w-52 bg-white border border-slate-100 rounded-xl shadow-xl max-h-48 overflow-y-auto p-1">
                             {PREFIJOS.map(p => (
                               <button key={p.iso} type="button" onClick={() => {setClientePrefijo(p.code); setMostrarPrefijos(false);}} className="w-full flex items-center gap-3 px-3 py-2 hover:bg-slate-50 rounded-lg text-xs font-bold text-slate-600">
                                 <img src={`https://flagcdn.com/w20/${p.iso}.png`} className="w-4" alt={p.country} /> <span className="truncate">{p.country}</span> <span className="ml-auto text-slate-400">{p.code}</span>
@@ -368,7 +392,7 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
           </div>
 
           {/* PANEL DERECHO: SELECTOR DE HORAS */}
-          <div className="w-full md:w-85 bg-slate-50 flex flex-col shrink-0 md:border-l border-slate-200 border-t md:border-t-0">
+          <div className="w-full md:w-[340px] bg-slate-50 flex flex-col shrink-0 md:border-l border-slate-200 border-t md:border-t-0">
             <div className="p-5 md:p-8 flex-1 flex flex-col md:overflow-hidden h-full">
               
               <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest mb-4 flex justify-between items-center shrink-0">
@@ -376,7 +400,6 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
                 {cargandoHuecos && <div className="animate-spin h-3 w-3 border-2 border-indigo-600 border-t-transparent rounded-full" />}
               </Label>
               
-              {/* AJUSTE RESPONSIVE: En móvil el scroll se funde con el de la página. En escritorio sí tiene scroll vertical independiente. */}
               <div className="grid grid-cols-4 md:grid-cols-3 gap-2 flex-1 content-start md:overflow-y-auto md:pr-1 scrollbar-hide mb-6 md:mb-0">
                 {huecosDisponibles.map((slot) => (
                   <button
