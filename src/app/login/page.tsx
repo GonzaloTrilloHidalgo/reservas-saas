@@ -12,7 +12,9 @@ function traducirError(mensaje: string): string {
   if (m.includes("user already registered") || m.includes("already been registered"))
     return "Ese email ya tiene una cuenta. Inicia sesión.";
   if (m.includes("password should be at least"))
-    return "La contraseña debe tener al menos 6 caracteres.";
+    return "La contraseña es demasiado corta (mínimo 8 caracteres).";
+  if (m.includes("password is known to be weak") || m.includes("pwned") || m.includes("compromised"))
+    return "Esa contraseña aparece en filtraciones conocidas. Elige otra más segura.";
   if (m.includes("email not confirmed"))
     return "Confirma tu email antes de iniciar sesión (revisa tu bandeja de entrada).";
   if (m.includes("unable to validate email") || m.includes("invalid format"))
@@ -181,7 +183,7 @@ export default function LoginPage() {
                 <input
                   type={showPassword ? "text" : "password"}
                   required
-                  minLength={6}
+                  minLength={8}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-10 pr-12 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 outline-none transition-all text-slate-900"
@@ -197,7 +199,7 @@ export default function LoginPage() {
                 </button>
               </div>
               {!isLogin && (
-                <p className="mt-2 text-xs text-slate-400 font-medium">Mínimo 6 caracteres.</p>
+                <p className="mt-2 text-xs text-slate-400 font-medium">Mínimo 8 caracteres.</p>
               )}
             </div>
 

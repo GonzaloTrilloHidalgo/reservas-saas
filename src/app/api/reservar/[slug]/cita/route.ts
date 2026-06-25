@@ -5,6 +5,25 @@ import { rateLimit, ipDe } from "@/lib/rate-limit";
 
 const UN_ANIO_MS = 365 * 24 * 60 * 60 * 1000;
 
+// Verifica el captcha de Cloudflare Turnstile. Si no hay secret configurado,
+// no se exige (el captcha está desactivado). Si lo hay, el token debe ser válido.
+async function captchaValido(token: string | undefined, ip: string): Promise<boolean> {
+  const secret = process.env.TURNSTILE_SECRET_KEY;
+  if (!secret) return true;
+  if (!token) return false;
+  try {
+    const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ secret, response: token, remoteip: ip }),
+    });
+    const data = (await res.json()) as { success?: boolean };
+    return data.success === true;
+  } catch {
+    return false;
+  }
+}
+
 // POST /api/reservar/[slug]/cita
 // Crea la reserva desde el portal público. Toda la validación es de servidor:
 // el precio y la duración se leen de la BD (no se confía en lo que mande el
@@ -30,11 +49,17 @@ export async function POST(
     hora?: string;
     nombre?: string;
     telefono?: string;
+    captchaToken?: string;
   };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Petición inválida" }, { status: 400 });
+  }
+
+  // Captcha anti-bot (si está configurado en el servidor)
+  if (!(await captchaValido(body.captchaToken, ipDe(request)))) {
+    return NextResponse.json({ error: "Verificación anti-bot fallida. Recarga e inténtalo de nuevo." }, { status: 403 });
   }
 
   const { servicioId, profesionalId, fecha, hora, telefono } = body;

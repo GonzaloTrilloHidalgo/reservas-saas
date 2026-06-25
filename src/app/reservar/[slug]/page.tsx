@@ -11,7 +11,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import TurnstileWidget from "@/components/TurnstileWidget";
 import { Servicio, Profesional } from "@/types";
+
+const captchaActivo = !!process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
 const PREFIJOS = [
   { iso: "es", code: "+34", country: "España" },
@@ -54,6 +57,7 @@ export default function PaginaReservaPublica({ params }: { params: Promise<{ slu
   const [prefijo, setPrefijo] = useState("+34");
   const [telefono, setTelefono] = useState("");
   const [mostrarPrefijos, setMostrarPrefijos] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState("");
   const prefijosRef = useRef<HTMLDivElement>(null);
   
   // ESTADOS PARA AUTOCOMPLETAR Y FESTIVOS
@@ -244,6 +248,7 @@ export default function PaginaReservaPublica({ params }: { params: Promise<{ slu
           hora: horaSeleccionada,
           nombre: nombre.trim(),
           telefono: telFinal,
+          captchaToken,
         }),
       });
 
@@ -515,9 +520,12 @@ export default function PaginaReservaPublica({ params }: { params: Promise<{ slu
                     {!clienteConocido && <p className="text-xs text-slate-500 font-medium">Parece que es tu primera reserva. Introduce tu nombre.</p>}
                   </div>
 
-                  <Button 
-                    onClick={confirmarReserva} 
-                    disabled={!nombre || isSubmitting}
+                  {/* Captcha anti-bot (solo aparece si está configurado) */}
+                  <TurnstileWidget onToken={setCaptchaToken} />
+
+                  <Button
+                    onClick={confirmarReserva}
+                    disabled={!nombre || isSubmitting || (captchaActivo && !captchaToken)}
                     className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl flex items-center justify-center gap-2 mt-8 shadow-xl shadow-indigo-200 disabled:opacity-50 transition-all active:scale-95"
                   >
                     {isSubmitting ? "Procesando..." : "Confirmar Reserva"}
