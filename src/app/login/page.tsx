@@ -3,18 +3,36 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { Layers, Mail, Lock, ArrowRight, Loader2, CheckCircle2, Building2 } from "lucide-react";
+import { Layers, Mail, Lock, ArrowRight, Loader2, CheckCircle2, Building2, Eye, EyeOff } from "lucide-react";
+
+// Traduce los errores de Supabase (vienen en inglés) a mensajes claros en español.
+function traducirError(mensaje: string): string {
+  const m = mensaje.toLowerCase();
+  if (m.includes("invalid login credentials")) return "Email o contraseña incorrectos.";
+  if (m.includes("user already registered") || m.includes("already been registered"))
+    return "Ese email ya tiene una cuenta. Inicia sesión.";
+  if (m.includes("password should be at least"))
+    return "La contraseña debe tener al menos 6 caracteres.";
+  if (m.includes("email not confirmed"))
+    return "Confirma tu email antes de iniciar sesión (revisa tu bandeja de entrada).";
+  if (m.includes("unable to validate email") || m.includes("invalid format"))
+    return "El email no tiene un formato válido.";
+  if (m.includes("for security purposes") || m.includes("rate limit") || m.includes("only request this after"))
+    return "Demasiados intentos. Espera unos segundos e inténtalo de nuevo.";
+  return mensaje;
+}
 
 export default function LoginPage() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [nombreNegocio, setNombreNegocio] = useState(""); // <-- NUEVO ESTADO
   const [loading, setLoading] = useState(false);
-  
+
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  
+
   const router = useRouter();
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -69,8 +87,9 @@ export default function LoginPage() {
         setPassword(""); 
         setNombreNegocio("");
       }
-    } catch (error: any) {
-      setErrorMsg(error.message || "Ocurrió un error de autenticación");
+    } catch (error) {
+      const mensaje = error instanceof Error ? error.message : "Ocurrió un error de autenticación";
+      setErrorMsg(traducirError(mensaje));
     } finally {
       setLoading(false);
     }
@@ -103,7 +122,7 @@ export default function LoginPage() {
 
           {errorMsg && (
             <div className="mb-6 bg-red-50 text-red-600 p-3 rounded-lg text-sm font-medium border border-red-100 text-center animate-in fade-in duration-300">
-              {errorMsg === "Invalid login credentials" ? "Email o contraseña incorrectos" : errorMsg}
+              {errorMsg}
             </div>
           )}
 
@@ -160,14 +179,26 @@ export default function LoginPage() {
                   <Lock size={18} />
                 </div>
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   required
+                  minLength={6}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 outline-none transition-all text-slate-900"
+                  className="w-full pl-10 pr-12 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 outline-none transition-all text-slate-900"
                   placeholder="••••••••"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
+              {!isLogin && (
+                <p className="mt-2 text-xs text-slate-400 font-medium">Mínimo 6 caracteres.</p>
+              )}
             </div>
 
             <button
