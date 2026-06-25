@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { esFecha } from "@/lib/validacion";
+import { rateLimit, ipDe } from "@/lib/rate-limit";
 
 // GET /api/reservar/[slug]/disponibilidad?fecha=YYYY-MM-DD&profesionalId=...
 // Devuelve si el día está cerrado (festivo/vacaciones) y los tramos ya ocupados
@@ -10,11 +12,17 @@ export async function GET(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   const { slug } = await params;
+
+  // Rate limit: máx. 60 consultas por minuto por IP (el portal consulta a menudo).
+  if (!rateLimit(`disp:${ipDe(request)}`, 60, 60_000)) {
+    return NextResponse.json({ error: "Demasiadas solicitudes." }, { status: 429 });
+  }
+
   const fecha = request.nextUrl.searchParams.get("fecha");
   const profesionalId = request.nextUrl.searchParams.get("profesionalId");
 
-  if (!fecha) {
-    return NextResponse.json({ error: "Falta la fecha" }, { status: 400 });
+  if (!esFecha(fecha)) {
+    return NextResponse.json({ error: "Fecha no válida" }, { status: 400 });
   }
 
   const { data: negocio } = await supabaseAdmin

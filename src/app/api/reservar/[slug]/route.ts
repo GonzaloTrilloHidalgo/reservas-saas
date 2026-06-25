@@ -1,15 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { rateLimit, ipDe } from "@/lib/rate-limit";
 
 // GET /api/reservar/[slug]
 // Devuelve los datos públicos necesarios para pintar el portal de reservas de
 // un negocio concreto: nombre, horario y catálogo de servicios/profesionales.
 // No expone nada sensible (ni clientes, ni citas de otros, ni ajustes ajenos).
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
 ) {
   const { slug } = await params;
+
+  // Rate limit anti-scraping: máx. 30 cargas por minuto por IP.
+  if (!rateLimit(`portal:${ipDe(request)}`, 30, 60_000)) {
+    return NextResponse.json({ error: "Demasiadas solicitudes." }, { status: 429 });
+  }
 
   const { data: negocio, error } = await supabaseAdmin
     .from("negocios")

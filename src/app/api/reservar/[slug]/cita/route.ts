@@ -1,15 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { esFecha, esHora, esTelefono, nombreLimpio } from "@/lib/validacion";
+import { rateLimit, ipDe } from "@/lib/rate-limit";
+
+const UN_ANIO_MS = 365 * 24 * 60 * 60 * 1000;
 
 // POST /api/reservar/[slug]/cita
 // Crea la reserva desde el portal público. Toda la validación es de servidor:
 // el precio y la duración se leen de la BD (no se confía en lo que mande el
-// navegador), se comprueba que el día no esté cerrado y que el hueco siga libre.
+// navegador), se comprueba formato, horario, cierre y que el hueco siga libre.
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
 ) {
   const { slug } = await params;
+
+  // Rate limit: máx. 5 reservas por minuto por IP (frena spam de citas).
+  if (!rateLimit(`cita:${ipDe(request)}`, 5, 60_000)) {
+    return NextResponse.json(
+      { error: "Demasiadas solicitudes. Espera un momento e inténtalo de nuevo." },
+      { status: 429 }
+    );
+  }
 
   let body: {
     servicioId?: number | string;
@@ -25,10 +37,18 @@ export async function POST(
     return NextResponse.json({ error: "Petición inválida" }, { status: 400 });
   }
 
-  const { servicioId, profesionalId, fecha, hora, nombre, telefono } = body;
+  const { servicioId, profesionalId, fecha, hora, telefono } = body;
 
-  if (!servicioId || !profesionalId || !fecha || !hora || !nombre?.trim() || !telefono) {
+  // Validación de formato y saneado de entrada
+  const nombre = nombreLimpio(body.nombre);
+  if (!servicioId || !profesionalId || !nombre) {
     return NextResponse.json({ error: "Faltan datos de la reserva" }, { status: 400 });
+  }
+  if (!esFecha(fecha) || !esHora(hora)) {
+    return NextResponse.json({ error: "Fecha u hora con formato no válido" }, { status: 400 });
+  }
+  if (!esTelefono(telefono)) {
+    return NextResponse.json({ error: "Teléfono no válido" }, { status: 400 });
   }
 
   // 1. Negocio
@@ -72,18 +92,31 @@ export async function POST(
   const inicio = new Date(`${fecha}T${hora}:00`);
   const fin = new Date(inicio.getTime() + duracion * 60000);
 
-  if (Number.isNaN(inicio.getTime()) || inicio < new Date()) {
-    return NextResponse.json({ error: "Fecha u hora no válida" }, { status: 400 });
+  // No permitimos citas en el pasado ni a más de un año vista.
+  const ahora = Date.now();
+  if (Number.isNaN(inicio.getTime()) || inicio.getTime() < ahora || inicio.getTime() - ahora > UN_ANIO_MS) {
+    return NextResponse.json({ error: "Fecha u hora fuera de rango" }, { status: 400 });
   }
 
-  // 4. ¿Día cerrado?
+  // 4. Ajustes del negocio (horario + base para los cierres)
   const { data: ajustes } = await supabaseAdmin
     .from("ajustes")
-    .select("id")
+    .select("id, hora_apertura, hora_cierre")
     .eq("negocio_id", negocio.id)
     .single();
 
+  // La cita debe caber dentro del horario de apertura del negocio.
   if (ajustes) {
+    const [h, m] = hora.split(":").map(Number);
+    const inicioFrac = h + m / 60;
+    const finFrac = inicioFrac + duracion / 60;
+    const horaApertura = ajustes.hora_apertura ?? 0;
+    const horaCierre = ajustes.hora_cierre ?? 24;
+    if (inicioFrac < horaApertura || finFrac > horaCierre + 0.001) {
+      return NextResponse.json({ error: "Esa hora está fuera del horario del negocio" }, { status: 409 });
+    }
+
+    // 5. ¿Día cerrado (festivo/vacaciones)?
     const { data: cierre } = await supabaseAdmin
       .from("cierres_negocio")
       .select("id")
@@ -96,7 +129,7 @@ export async function POST(
     }
   }
 
-  // 5. ¿El hueco sigue libre? (evita dobles reservas en el mismo instante)
+  // 6. ¿El hueco sigue libre? (evita dobles reservas en el mismo instante)
   const { data: citasDia } = await supabaseAdmin
     .from("citas")
     .select("fecha_inicio, fecha_fin")
@@ -116,7 +149,7 @@ export async function POST(
     return NextResponse.json({ error: "Ese hueco acaba de ocuparse" }, { status: 409 });
   }
 
-  // 6. Cliente: buscar por teléfono o crear
+  // 7. Cliente: buscar por teléfono o crear
   let clienteId: string | null = null;
   const { data: clienteExistente } = await supabaseAdmin
     .from("clientes")
@@ -128,16 +161,16 @@ export async function POST(
 
   if (clienteExistente) {
     clienteId = clienteExistente.id;
-    if (clienteExistente.nombre !== nombre.trim()) {
+    if (clienteExistente.nombre !== nombre) {
       await supabaseAdmin
         .from("clientes")
-        .update({ nombre: nombre.trim() })
+        .update({ nombre })
         .eq("id", clienteId);
     }
   } else {
     const { data: nuevo, error: errCliente } = await supabaseAdmin
       .from("clientes")
-      .insert([{ nombre: nombre.trim(), telefono, negocio_id: negocio.id }])
+      .insert([{ nombre, telefono, negocio_id: negocio.id }])
       .select("id")
       .single();
     if (errCliente || !nuevo) {
@@ -146,10 +179,10 @@ export async function POST(
     clienteId = nuevo.id;
   }
 
-  // 7. Crear la cita
+  // 8. Crear la cita
   const { error: errCita } = await supabaseAdmin.from("citas").insert([
     {
-      cliente_nombre: nombre.trim(),
+      cliente_nombre: nombre,
       cliente_id: clienteId,
       servicio: servicio.nombre,
       profesional_id: profesionalId,

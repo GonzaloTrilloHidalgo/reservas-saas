@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { esTelefono } from "@/lib/validacion";
+import { rateLimit, ipDe } from "@/lib/rate-limit";
 
 // GET /api/reservar/[slug]/cliente?telefono=+34600000000
 // Autocompletar para clientes que repiten: devuelve ÚNICAMENTE el nombre, y solo
@@ -10,9 +12,19 @@ export async function GET(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   const { slug } = await params;
+
+  // Rate limit estricto: este endpoint podría usarse para enumerar teléfonos.
+  // Máx. 15 consultas por minuto por IP.
+  if (!rateLimit(`cliente:${ipDe(request)}`, 15, 60_000)) {
+    return NextResponse.json(
+      { error: "Demasiadas solicitudes. Espera un momento." },
+      { status: 429 }
+    );
+  }
+
   const telefono = request.nextUrl.searchParams.get("telefono");
 
-  if (!telefono || telefono.length < 6) {
+  if (!esTelefono(telefono)) {
     return NextResponse.json({ nombre: null });
   }
 
