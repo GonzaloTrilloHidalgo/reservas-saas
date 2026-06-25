@@ -12,6 +12,7 @@ export default function SuscripcionCard() {
   const [activa, setActiva] = useState(false);
   const [tieneCliente, setTieneCliente] = useState(false);
   const [diasPrueba, setDiasPrueba] = useState<number | null>(null);
+  const [cancelaEl, setCancelaEl] = useState<number | null>(null);
 
   useEffect(() => {
     async function cargar() {
@@ -29,11 +30,30 @@ export default function SuscripcionCard() {
           const ms = new Date(data.trial_ends_at).getTime() - Date.now();
           setDiasPrueba(Math.max(0, Math.ceil(ms / 86_400_000)));
         }
+
+        // Si está suscrito, consultamos a Stripe si está programada la cancelación.
+        if (data.suscripcion_activa) {
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const res = await fetch("/api/stripe/estado", {
+              method: "POST",
+              headers: { Authorization: `Bearer ${session?.access_token ?? ""}` },
+            });
+            const est = await res.json().catch(() => ({}));
+            if (est?.cancelaAlTerminar && est?.cancelaEl) setCancelaEl(est.cancelaEl);
+          } catch {
+            // si falla, simplemente no mostramos el aviso de cancelación
+          }
+        }
       }
       setCargando(false);
     }
     cargar();
   }, []);
+
+  const fechaCancela = cancelaEl
+    ? new Date(cancelaEl).toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })
+    : null;
 
   async function llamar(endpoint: "checkout" | "portal") {
     setProcesando(true);
@@ -71,8 +91,12 @@ export default function SuscripcionCard() {
           <p className="text-xs text-slate-500">Plan Velo · 30€/mes</p>
         </div>
         {activa && (
-          <span className="ml-auto inline-flex items-center gap-1 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
-            <CheckCircle2 size={14} /> Activa
+          <span className={`ml-auto inline-flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-full border ${
+            fechaCancela
+              ? "text-amber-600 bg-amber-50 border-amber-100"
+              : "text-emerald-600 bg-emerald-50 border-emerald-100"
+          }`}>
+            <CheckCircle2 size={14} /> {fechaCancela ? "Se cancela pronto" : "Activa"}
           </span>
         )}
       </div>
@@ -81,6 +105,14 @@ export default function SuscripcionCard() {
         <p className="text-sm text-slate-600 mb-3">
           Estás en el periodo de prueba: te quedan <strong>{diasPrueba} {diasPrueba === 1 ? "día" : "días"}</strong>. Suscríbete para no perder el acceso.
         </p>
+      )}
+
+      {activa && fechaCancela && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-3">
+          <p className="text-sm text-amber-700">
+            Tu suscripción seguirá <strong>activa hasta el {fechaCancela}</strong>. Ese día se cancelará y perderás el acceso. Puedes reactivarla antes desde &quot;Gestionar suscripción&quot;.
+          </p>
+        </div>
       )}
 
       {activa || tieneCliente ? (
