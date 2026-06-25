@@ -3,8 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
-import { supabase } from "@/lib/supabase";
-import { use } from "react"; 
+import { use } from "react";
 import { 
   CalendarDays, Clock, User, Phone, 
   ChevronRight, ArrowLeft, CheckCircle2, Ban 
@@ -33,7 +32,6 @@ export default function PaginaReservaPublica({ params }: { params: Promise<{ slu
 
   // IDENTIFICADORES MULTI-TENANT (SaaS)
   const [negocioIdActual, setNegocioIdActual] = useState<string | null>(null);
-  const [ajustesIdActual, setAjustesIdActual] = useState<number | null>(null);
   const [nombreNegocioVisual, setNombreNegocioVisual] = useState("");
 
   // DATOS DE LA BASE DE DATOS
@@ -78,69 +76,61 @@ export default function PaginaReservaPublica({ params }: { params: Promise<{ slu
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // 1. CARGA INICIAL: BUSCAMOS EL NEGOCIO POR SLUG
+  // 1. CARGA INICIAL: pedimos al backend los datos públicos del negocio (por slug).
+  // El navegador ya no toca la base de datos directamente; todo pasa por la API.
   useEffect(() => {
     async function cargarDatos() {
-      // Obtenemos el Negocio a través de la URL (slug)
-      const { data: n, error: errN } = await supabase
-        .from("negocios")
-        .select("id, nombre")
-        .eq("slug", slugDelNegocio)
-        .single();
-      
-      if (errN || !n) {
+      try {
+        const res = await fetch(`/api/reservar/${slugDelNegocio}`);
+        if (!res.ok) {
+          setNegocioNoEncontrado(true);
+          return;
+        }
+        const data = await res.json();
+
+        setNegocioIdActual(data.negocio.id);
+        setNombreNegocioVisual(data.negocio.nombre);
+
+        setHoraApertura(data.ajustes.horaApertura);
+        setHoraCierre(data.ajustes.horaCierre);
+        setInicioDescanso(data.ajustes.inicioDescanso);
+        setFinDescanso(data.ajustes.finDescanso);
+
+        setServicios(data.servicios);
+        setProfesionales(data.profesionales);
+
+        setFecha(new Date().toISOString().split("T")[0]);
+      } catch {
         setNegocioNoEncontrado(true);
-        return;
       }
-
-      setNegocioIdActual(n.id);
-      setNombreNegocioVisual(n.nombre);
-
-      // Cargamos los ajustes específicos de ESE negocio
-      const { data: a } = await supabase.from("ajustes").select("*").eq("negocio_id", n.id).single();
-      if (a) { 
-        setAjustesIdActual(a.id);
-        setHoraApertura(a.hora_apertura); 
-        setHoraCierre(a.hora_cierre); 
-        setInicioDescanso(a.hora_inicio_descanso || 14);
-        setFinDescanso(a.hora_fin_descanso || 15);
-      }
-
-      // Cargamos Servicios y Profesionales vinculados a ESE negocio
-      const { data: s } = await supabase.from("servicios").select("*").eq("negocio_id", n.id).is("fecha_borrado", null).order("nombre");
-      const { data: p } = await supabase.from("profesionales").select("*").eq("negocio_id", n.id).is("fecha_borrado", null).order("nombre");
-      
-      if (s) setServicios(s);
-      if (p) setProfesionales(p);
-      
-      setFecha(new Date().toISOString().split("T")[0]);
     }
     cargarDatos();
   }, [slugDelNegocio]);
 
-  // 2. COMPROBAR FESTIVOS (Con el ID de Ajustes de este negocio)
+  // 2. COMPROBAR FESTIVOS (vía API, en cuanto cambia la fecha)
   useEffect(() => {
     async function comprobarCierre() {
-      if (!fecha || !ajustesIdActual) return; 
-      
-      const { data } = await supabase
-        .from("cierres_negocio")
-        .select("motivo")
-        .eq("fecha", fecha)
-        .eq("ajustes_id", ajustesIdActual)
-        .is("fecha_borrado", null)
-        .maybeSingle();
+      if (!fecha || !negocioIdActual) return;
 
-      if (data) {
-        setEsDiaCerrado(true);
-        setMotivoCierre(data.motivo || "Cierre Total");
-      } else {
+      try {
+        const res = await fetch(
+          `/api/reservar/${slugDelNegocio}/disponibilidad?fecha=${fecha}`
+        );
+        const data = await res.json();
+        if (data.esDiaCerrado) {
+          setEsDiaCerrado(true);
+          setMotivoCierre(data.motivoCierre || "Cierre Total");
+        } else {
+          setEsDiaCerrado(false);
+          setMotivoCierre("");
+        }
+      } catch {
         setEsDiaCerrado(false);
         setMotivoCierre("");
       }
     }
     comprobarCierre();
-  }, [fecha, ajustesIdActual]);
+  }, [fecha, negocioIdActual, slugDelNegocio]);
 
   // 3. CALCULAR HUECOS
   useEffect(() => {
@@ -154,17 +144,18 @@ export default function PaginaReservaPublica({ params }: { params: Promise<{ slu
     setHoraSeleccionada(null);
 
     const duracion = servicioSeleccionado.duracion || 60;
-    const inicioDia = `${fecha}T00:00:00Z`;
-    const finDia = `${fecha}T23:59:59Z`;
 
-    // Buscamos solo las citas del profesional seleccionado
-    const { data: citasExistentes } = await supabase
-      .from("citas")
-      .select("fecha_inicio, fecha_fin")
-      .eq("profesional_id", profesionalSeleccionado.id)
-      .is("fecha_borrado", null)
-      .gte("fecha_inicio", inicioDia)
-      .lte("fecha_inicio", finDia);
+    // Pedimos al backend los tramos ya ocupados de este profesional ese día.
+    let citasExistentes: { fecha_inicio: string; fecha_fin: string }[] = [];
+    try {
+      const res = await fetch(
+        `/api/reservar/${slugDelNegocio}/disponibilidad?fecha=${fecha}&profesionalId=${profesionalSeleccionado.id}`
+      );
+      const data = await res.json();
+      citasExistentes = data.ocupadas || [];
+    } catch {
+      citasExistentes = [];
+    }
 
     const slots = [];
     const ahora = new Date();
@@ -207,25 +198,23 @@ export default function PaginaReservaPublica({ params }: { params: Promise<{ slu
 
     try {
       const telFinal = `${prefijo}${telefono.replace(/\s+/g, "")}`;
-      
-      const { data } = await supabase
-        .from("clientes")
-        .select("nombre")
-        .eq("negocio_id", negocioIdActual) // Solo buscamos clientes de ESTE negocio
-        .is("fecha_borrado", null)
-        .eq("telefono", telFinal);
 
-      if (data && data.length > 0) {
-        setNombre(data[0].nombre);
+      const res = await fetch(
+        `/api/reservar/${slugDelNegocio}/cliente?telefono=${encodeURIComponent(telFinal)}`
+      );
+      const data = await res.json();
+
+      if (data.nombre) {
+        setNombre(data.nombre);
         setClienteConocido(true);
       } else {
         setNombre("");
         setClienteConocido(false);
       }
-      
+
       setTelefonoVerificado(true);
-    } catch (error) {
-      setTelefonoVerificado(true); 
+    } catch {
+      setTelefonoVerificado(true);
     } finally {
       setBuscandoCliente(false);
     }
@@ -237,62 +226,30 @@ export default function PaginaReservaPublica({ params }: { params: Promise<{ slu
 
     try {
       const telFinal = `${prefijo}${telefono.replace(/\s+/g, "")}`;
-      let clienteId = null;
 
-      const { data: clientesExistentes } = await supabase
-        .from("clientes")
-        .select("id, telefono, nombre")
-        .eq("negocio_id", negocioIdActual)
-        .is("fecha_borrado", null)
-        .eq("telefono", telFinal);
+      // El backend valida precio, duración, cierre y solapes, y crea cliente + cita.
+      const res = await fetch(`/api/reservar/${slugDelNegocio}/cita`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          servicioId: servicioSeleccionado.id,
+          profesionalId: profesionalSeleccionado.id,
+          fecha,
+          hora: horaSeleccionada,
+          nombre: nombre.trim(),
+          telefono: telFinal,
+        }),
+      });
 
-      if (clientesExistentes && clientesExistentes.length > 0) {
-        clienteId = clientesExistentes[0].id;
-        if (clientesExistentes[0].nombre !== nombre.trim()) {
-          await supabase.from("clientes").update({ nombre: nombre.trim() }).eq("id", clienteId);
-        }
-      } else {
-        // Al ser portal público, INYECTAMOS explícitamente el negocio_id al crear el cliente
-        const { data: nuevoCliente, error: errC } = await supabase
-          .from("clientes")
-          .insert([{ 
-            nombre: nombre.trim(), 
-            telefono: telFinal,
-            negocio_id: negocioIdActual
-          }])
-          .select("id"); 
-
-        if (errC) throw errC;
-        if (nuevoCliente && nuevoCliente.length > 0) {
-          clienteId = nuevoCliente[0].id;
-        }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "No se pudo confirmar la reserva");
       }
 
-      if (!clienteId) throw new Error("No se pudo obtener el ID del cliente.");
-
-      const duracionFinal = servicioSeleccionado.duracion || 60;
-      const start = new Date(`${fecha}T${horaSeleccionada}:00`).toISOString();
-      const end = new Date(new Date(start).getTime() + duracionFinal * 60000).toISOString();
-
-      // Creamos la cita asignándola al negocio actual
-      const { error: errorCita } = await supabase.from("citas").insert([{
-        cliente_nombre: nombre.trim(),
-        cliente_id: clienteId,
-        servicio: servicioSeleccionado.nombre,
-        profesional_id: profesionalSeleccionado.id,
-        negocio_id: negocioIdActual,
-        fecha_inicio: start,
-        fecha_fin: end,
-        precio: servicioSeleccionado.precio || 0,
-        estado: 'pendiente' 
-      }]);
-
-      if (errorCita) throw errorCita;
-
-      setStep(4); 
+      setStep(4);
     } catch (error) {
       console.error(error);
-      alert("Hubo un problema al confirmar tu reserva.");
+      alert(error instanceof Error ? error.message : "Hubo un problema al confirmar tu reserva.");
     } finally {
       setIsSubmitting(false);
     }
