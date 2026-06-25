@@ -26,6 +26,14 @@ interface CitaIngreso {
   cliente: string;
 }
 
+// Evita la inyección de fórmulas (CSV/Excel injection): si un texto empieza por
+// un carácter que Excel podría interpretar como fórmula, lo prefijamos con ' para
+// que se trate siempre como texto.
+function sanearCelda(valor: string): string {
+  if (/^[=+\-@\t\r]/.test(valor)) return `'${valor}`;
+  return valor;
+}
+
 export default function IngresosPage() {
   const [citas, setCitas] = useState<CitaIngreso[]>([]);
   const [, setLoading] = useState(true);
@@ -86,9 +94,9 @@ export default function IngresosPage() {
 
     const datosExcel = citasFiltradas.map(cita => ({
       "Fecha y Hora": format(parseISO(cita.fecha_inicio), "dd/MM/yyyy HH:mm"),
-      "Cliente": cita.cliente,
-      "Servicio": cita.servicio,
-      "Profesional": cita.profesional,
+      "Cliente": sanearCelda(cita.cliente),
+      "Servicio": sanearCelda(cita.servicio),
+      "Profesional": sanearCelda(cita.profesional),
       "Ingreso (€)": cita.precio
     }));
 

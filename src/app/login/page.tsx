@@ -62,9 +62,10 @@ export default function LoginPage() {
 
         sessionStorage.setItem("is_registering", "true");
 
-        // 1. Generamos un SLUG seguro (ej: "Mi Barbería" -> "mi-barberia-x8f2")
+        // 1. Generamos un SLUG seguro (ej: "Mi Barbería" -> "mi-barberia-a1b2c3d4")
         const baseSlug = nombreNegocio.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
-        const randomSuffix = Math.random().toString(36).substring(2, 6);
+        // Sufijo aleatorio criptográficamente seguro (no adivinable), 8 caracteres hex.
+        const randomSuffix = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
         const finalSlug = `${baseSlug}-${randomSuffix}`;
 
         // 2. Enviamos el registro adjuntando los metadatos ocultos
