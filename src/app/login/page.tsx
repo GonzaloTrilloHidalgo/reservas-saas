@@ -31,8 +31,8 @@ export default function LoginPage() {
           password,
         });
         if (error) throw error;
-        
-        router.push("/");
+
+        router.push("/agenda");
       } else {
         // REGISTRAR NUEVO NEGOCIO (SaaS Onboarding)
         if (!nombreNegocio.trim()) throw new Error("El nombre del negocio es obligatorio");

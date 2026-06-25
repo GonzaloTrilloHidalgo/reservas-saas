@@ -62,7 +62,7 @@ export default function Sidebar() {
   }, []);
 
   const menuItems = [
-    { icon: LayoutDashboard, label: "Agenda", href: "/" },
+    { icon: LayoutDashboard, label: "Agenda", href: "/agenda" },
     { icon: Contact, label: "Clientes", href: "/clientes" },
     { icon: Users, label: "Profesionales", href: "/staff" },
     { icon: Tags, label: "Servicios", href: "/servicios" },
