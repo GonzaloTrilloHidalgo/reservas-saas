@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Calendar, dateFnsLocalizer, View, ToolbarProps } from "react-big-calendar";
 import { format, parse, startOfWeek, getDay, isToday, isSameWeek } from "date-fns";
 import { es } from "date-fns/locale";
@@ -91,7 +91,6 @@ const CustomToolbar = (toolbar: ToolbarProps<CitaCalendario, object>) => {
 export default function CalendarView() {
   const [allEvents, setAllEvents] = useState<CitaCalendario[]>([]);
   const [backgroundEvents, setBackgroundEvents] = useState<CitaCalendario[]>([]);
-  const [filteredEvents, setFilteredEvents] = useState<CitaCalendario[]>([]);
 
   const [profesionales, setProfesionales] = useState<string[]>([]);
   const [activeFilter, setActiveFilter] = useState("Todos");
@@ -107,6 +106,8 @@ export default function CalendarView() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
+    // cargarDatosIniciales se declara más abajo; este efecto solo corre al montar.
+    // eslint-disable-next-line react-hooks/immutability
     cargarDatosIniciales();
     const handleResize = () => { if (window.innerWidth < 768) setView("day"); else setView("week"); };
     handleResize();
@@ -114,10 +115,11 @@ export default function CalendarView() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  useEffect(() => {
-    if (activeFilter === "Todos") setFilteredEvents(allEvents);
-    else setFilteredEvents(allEvents.filter(e => e.profesional === activeFilter));
-  }, [activeFilter, allEvents]);
+  // Valor derivado: filtramos en el render en lugar de sincronizar con un effect.
+  const filteredEvents = useMemo(
+    () => activeFilter === "Todos" ? allEvents : allEvents.filter(e => e.profesional === activeFilter),
+    [activeFilter, allEvents]
+  );
 
   const cargarDatosIniciales = async () => {
     // 1. IDENTIFICAR AL USUARIO Y SU NEGOCIO

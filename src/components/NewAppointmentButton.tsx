@@ -98,6 +98,8 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
   };
 
   useEffect(() => {
+    // Al cerrar el modal limpiamos el formulario (sincronización intencionada).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!open) resetForm();
   }, [open]);
 
@@ -164,8 +166,11 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
 
   useEffect(() => {
     if (open && fecha && profesionalId && duracionMinutos) {
+      // calcularHuecosDisponibles se declara más abajo y depende del horario del negocio.
+      // eslint-disable-next-line react-hooks/immutability
       calcularHuecosDisponibles();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, fecha, profesionalId, duracionMinutos, tipo, esDiaCerrado]);
 
   useEffect(() => {
@@ -383,12 +388,14 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
                     <div className="flex gap-2">
                       <div className="relative" ref={prefijosRef}>
                         <button type="button" onClick={() => setMostrarPrefijos(!mostrarPrefijos)} className="h-12 px-3 border border-slate-200 rounded-xl flex items-center gap-2 bg-slate-50 text-sm font-bold hover:bg-slate-100 transition-colors">
+                          {/* eslint-disable-next-line @next/next/no-img-element -- icono de bandera 20px de CDN externo */}
                           <img src={`https://flagcdn.com/w20/${infoP.iso}.png`} className="w-5 rounded-sm" alt="flag" /> {clientePrefijo}
                         </button>
                         {mostrarPrefijos && (
                           <div className="absolute top-14 left-0 z-50 w-52 bg-white border border-slate-100 rounded-xl shadow-xl max-h-48 overflow-y-auto p-1">
                             {PREFIJOS.map(p => (
                               <button key={p.iso} type="button" onClick={() => {setClientePrefijo(p.code); setMostrarPrefijos(false);}} className="w-full flex items-center gap-3 px-3 py-2 hover:bg-slate-50 rounded-lg text-xs font-bold text-slate-600">
+                                {/* eslint-disable-next-line @next/next/no-img-element -- icono de bandera 20px de CDN externo */}
                                 <img src={`https://flagcdn.com/w20/${p.iso}.png`} className="w-4" alt={p.country} /> <span className="truncate">{p.country}</span> <span className="ml-auto text-slate-400">{p.code}</span>
                               </button>
                             ))}

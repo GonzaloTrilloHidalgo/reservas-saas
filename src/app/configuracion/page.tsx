@@ -29,7 +29,8 @@ export default function ConfiguracionPage() {
   const [nuevoMotivo, setNuevoMotivo] = useState("");
 
   useEffect(() => {
-    cargarDatos();
+    cargarDatos(); // se declara abajo y se reutiliza tras guardar/eliminar
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function cargarDatos() {

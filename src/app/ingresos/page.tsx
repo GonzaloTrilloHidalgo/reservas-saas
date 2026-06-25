@@ -34,6 +34,8 @@ export default function IngresosPage() {
   const [toast, setToast] = useState<{ mensaje: string; tipo: "error" | "exito" } | null>(null);
 
   useEffect(() => {
+    // cargarIngresos se declara más abajo; este efecto solo corre al montar.
+    // eslint-disable-next-line react-hooks/immutability
     cargarIngresos();
   }, []);
 
