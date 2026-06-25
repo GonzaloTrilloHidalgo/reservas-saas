@@ -18,6 +18,18 @@ interface NewAppointmentProps {
   onAppointmentCreated: () => void;
 }
 
+// Opciones estándar del desplegable de duración (en minutos).
+const OPCIONES_DURACION = [15, 30, 45, 60, 90, 120];
+
+// Da formato legible a una duración en minutos (ej. 60 -> "1 hora", 75 -> "75 min").
+function formatoDuracion(min: number): string {
+  if (min === 60) return "1 hora";
+  if (min === 90) return "1.5 h";
+  if (min === 120) return "2 h";
+  if (min > 120 && min % 60 === 0) return `${min / 60} h`;
+  return `${min} min`;
+}
+
 const PREFIJOS = [
   { iso: "es", code: "+34", country: "España", placeholder: "600 123 456" },
   { iso: "mx", code: "+52", country: "México", placeholder: "55 1234 5678" },
@@ -40,6 +52,7 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
   const [clientePrefijo, setClientePrefijo] = useState("+34"); 
   const [clienteTelefono, setClienteTelefono] = useState("");
   const [clienteIdSeleccionado, setClienteIdSeleccionado] = useState<string | null>(null);
+  const [clienteDuplicado, setClienteDuplicado] = useState<{ id: string; nombre: string; telefono: string | null } | null>(null);
   const [mostrarSugerencias, setMostrarSugerencias] = useState(false);
   const [mostrarPrefijos, setMostrarPrefijos] = useState(false);
 
@@ -73,6 +86,7 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
     setClienteNombre("");
     setClienteTelefono("");
     setClienteIdSeleccionado(null);
+    setClienteDuplicado(null);
     setClientePrefijo("+34");
     setServicioId("");
     setPrecioActual("");
@@ -104,7 +118,7 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
 
       // 2. CARGAR DATOS FILTRADOS POR EL NEGOCIO DEL USUARIO
       const { data: p } = await supabase.from("profesionales").select("id, nombre").eq("negocio_id", negocioId).is("fecha_borrado", null).order("nombre");
-      const { data: s } = await supabase.from("servicios").select("id, nombre, precio").eq("negocio_id", negocioId).is("fecha_borrado", null).order("nombre");
+      const { data: s } = await supabase.from("servicios").select("id, nombre, precio, duracion").eq("negocio_id", negocioId).is("fecha_borrado", null).order("nombre");
       const { data: c } = await supabase.from("clientes").select("id, nombre, telefono").eq("negocio_id", negocioId).is("fecha_borrado", null).order("nombre");
       const { data: a } = await supabase.from("ajustes").select("*").eq("negocio_id", negocioId).single();
       
@@ -224,50 +238,86 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
     setMostrarSugerencias(false);
   };
 
+  // Inserta la cita en la base de datos y cierra el modal.
+  async function guardarCita(clienteIdFinal: string | null, nombreMostrar = clienteNombre) {
+    const start = new Date(`${fecha}T${horaSeleccionada}:00`).toISOString();
+    const end = new Date(new Date(start).getTime() + duracionMinutos * 60000).toISOString();
+
+    await supabase.from("citas").insert([{
+      cliente_nombre: tipo === "cita" ? nombreMostrar : "BLOQUEO",
+      cliente_id: clienteIdFinal,
+      servicio: tipo === "cita" ? servicios.find(s => s.id == servicioId)?.nombre : "Bloqueo",
+      profesional_id: profesionalId,
+      negocio_id: negocioIdActual,
+      fecha_inicio: start,
+      fecha_fin: end,
+      precio: parseFloat(String(precioActual)) || 0,
+      estado: 'pendiente'
+    }]);
+
+    setOpen(false);
+    onAppointmentCreated();
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!horaSeleccionada || !negocioIdActual) return setErrorMsg("Faltan datos para crear la cita");
     setIsSubmitting(true);
-    
+    setErrorMsg(null);
+
     try {
       let finalId = clienteIdSeleccionado;
-      let telFinal = clienteTelefono ? `${clientePrefijo}${clienteTelefono.replace(/\s+/g, "")}` : null;
+      const telFinal = clienteTelefono ? `${clientePrefijo}${clienteTelefono.replace(/\s+/g, "")}` : null;
 
       if (tipo === "cita") {
+        // Si no hay una ficha elegida explícitamente pero sí teléfono, comprobamos
+        // si ese número ya pertenece a un cliente. Si es así, avisamos y paramos.
+        if (!finalId && telFinal) {
+          const { data: existentes } = await supabase
+            .from("clientes")
+            .select("id, nombre, telefono")
+            .eq("negocio_id", negocioIdActual)
+            .eq("telefono", telFinal)
+            .is("fecha_borrado", null);
+
+          if (existentes && existentes.length > 0) {
+            setClienteDuplicado(existentes[0]);
+            setIsSubmitting(false);
+            return; // Esperamos la decisión del usuario
+          }
+        }
+
+        // No hay duplicado → creamos la ficha nueva
         if (!finalId) {
-          // Creamos el cliente asociándolo al negocio actual
-          const { data: n } = await supabase.from("clientes").insert([{ 
-            nombre: clienteNombre, 
+          const { data: n } = await supabase.from("clientes").insert([{
+            nombre: clienteNombre,
             telefono: telFinal,
             negocio_id: negocioIdActual
           }]).select("id").single();
-          
+
           if (n) finalId = n.id;
-        } else if (telFinal) {
-          await supabase.from("clientes").update({ telefono: telFinal }).eq("id", finalId);
         }
       }
 
-      const start = new Date(`${fecha}T${horaSeleccionada}:00`).toISOString();
-      const end = new Date(new Date(start).getTime() + duracionMinutos * 60000).toISOString();
+      await guardarCita(finalId);
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "No se pudo crear la cita");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
-      // Creamos la cita asociándola al negocio actual
-      await supabase.from("citas").insert([{
-        cliente_nombre: tipo === "cita" ? clienteNombre : "BLOQUEO",
-        cliente_id: finalId,
-        servicio: tipo === "cita" ? servicios.find(s => s.id == servicioId)?.nombre : "Bloqueo",
-        profesional_id: profesionalId,
-        negocio_id: negocioIdActual,
-        fecha_inicio: start,
-        fecha_fin: end,
-        precio: parseFloat(String(precioActual)) || 0,
-        estado: 'pendiente'
-      }]);
-
-      setOpen(false);
-      onAppointmentCreated();
-    } catch (err: any) {
-      setErrorMsg(err.message);
+  // El usuario confirma usar la ficha ya existente con ese teléfono.
+  const usarFichaExistente = async () => {
+    if (!clienteDuplicado) return;
+    setIsSubmitting(true);
+    setErrorMsg(null);
+    try {
+      setClienteIdSeleccionado(clienteDuplicado.id);
+      await guardarCita(clienteDuplicado.id, clienteDuplicado.nombre);
+      setClienteDuplicado(null);
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "No se pudo crear la cita");
     } finally {
       setIsSubmitting(false);
     }
@@ -315,7 +365,7 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
                     <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest">Nombre del Cliente</Label>
                     <div className="relative">
                       <User className="absolute left-4 top-3.5 text-slate-400" size={18} />
-                      <Input value={clienteNombre} onChange={(e) => {setClienteNombre(e.target.value); setMostrarSugerencias(true);}} className="h-12 pl-12 rounded-xl border-slate-200" placeholder="Ej. Juan Pérez" />
+                      <Input value={clienteNombre} onChange={(e) => {setClienteNombre(e.target.value); setMostrarSugerencias(true); setClienteIdSeleccionado(null); setClienteDuplicado(null);}} className="h-12 pl-12 rounded-xl border-slate-200" placeholder="Ej. Juan Pérez" />
                     </div>
                     {mostrarSugerencias && cliFiltrados.length > 0 && (
                       <div className="absolute z-50 w-full mt-1 bg-white border border-slate-100 rounded-xl shadow-xl max-h-40 overflow-y-auto">
@@ -345,7 +395,7 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
                       </div>
                       <div className="relative flex-1">
                         <Phone className="absolute left-4 top-3.5 text-slate-400" size={18} />
-                        <Input value={clienteTelefono} onChange={(e) => setClienteTelefono(e.target.value)} className="h-12 pl-12 rounded-xl border-slate-200" placeholder={infoP.placeholder} />
+                        <Input value={clienteTelefono} onChange={(e) => {setClienteTelefono(e.target.value); setClienteIdSeleccionado(null); setClienteDuplicado(null);}} className="h-12 pl-12 rounded-xl border-slate-200" placeholder={infoP.placeholder} />
                       </div>
                     </div>
                   </div>
@@ -353,7 +403,13 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest">Servicio</Label>
-                      <select value={servicioId} onChange={(e) => {setServicioId(e.target.value); setPrecioActual(servicios.find(s=>s.id == e.target.value)?.precio || "")}} className="w-full h-12 border border-slate-200 rounded-xl px-4 text-sm font-medium bg-white outline-none focus:ring-2 focus:ring-indigo-500">
+                      <select value={servicioId} onChange={(e) => {
+                        const serv = servicios.find(s => s.id == e.target.value);
+                        setServicioId(e.target.value);
+                        setPrecioActual(serv?.precio ?? "");
+                        // Autocompletamos la duración con la del servicio
+                        if (serv?.duracion) setDuracionMinutos(serv.duracion);
+                      }} className="w-full h-12 border border-slate-200 rounded-xl px-4 text-sm font-medium bg-white outline-none focus:ring-2 focus:ring-indigo-500">
                         <option value="">Seleccionar...</option>
                         {servicios.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
                       </select>
@@ -376,7 +432,12 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
                 <div className="space-y-2">
                   <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest">Duración</Label>
                   <select value={duracionMinutos} onChange={(e) => setDuracionMinutos(parseInt(e.target.value))} className="w-full h-12 border border-slate-200 rounded-xl px-4 text-sm font-medium bg-white outline-none focus:ring-2 focus:ring-indigo-500">
-                    <option value="15">15 min</option><option value="30">30 min</option><option value="45">45 min</option><option value="60">1 hora</option><option value="90">1.5 h</option><option value="120">2 h</option>
+                    {(OPCIONES_DURACION.includes(duracionMinutos)
+                      ? OPCIONES_DURACION
+                      : [...OPCIONES_DURACION, duracionMinutos].sort((a, b) => a - b)
+                    ).map((min) => (
+                      <option key={min} value={min}>{formatoDuracion(min)}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -423,14 +484,46 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
               </div>
 
               <div className="mt-auto pt-4 border-t border-slate-200 shrink-0 bg-slate-50 sticky bottom-0 z-10 md:static pb-2 md:pb-0">
-                {errorMsg && <p className="text-[10px] text-red-500 font-bold mb-3 text-center">{errorMsg}</p>}
-                <Button 
-                  onClick={handleSubmit} 
-                  disabled={isSubmitting || !horaSeleccionada || esDiaCerrado} 
-                  className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl shadow-xl shadow-indigo-100 transition-all active:scale-95 disabled:bg-slate-300 disabled:shadow-none"
-                >
-                  {isSubmitting ? "Procesando..." : esDiaCerrado ? "CERRADO" : "Confirmar Cita"}
-                </Button>
+                {clienteDuplicado ? (
+                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 animate-in fade-in zoom-in-95">
+                    <p className="text-xs font-black text-amber-700 uppercase tracking-tight mb-1.5 flex items-center gap-1.5">
+                      <AlertCircle size={14} /> Teléfono ya registrado
+                    </p>
+                    <p className="text-[11px] text-amber-700 leading-snug mb-3">
+                      Ya tienes a <strong>«{clienteDuplicado.nombre}»</strong> con el número{" "}
+                      <strong>{clienteDuplicado.telefono}</strong>. ¿Quieres asociar la cita a esa ficha?
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        onClick={usarFichaExistente}
+                        disabled={isSubmitting}
+                        className="flex-1 h-11 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl"
+                      >
+                        {isSubmitting ? "Guardando..." : `Usar ficha de ${clienteDuplicado.nombre.split(" ")[0]}`}
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={() => setClienteDuplicado(null)}
+                        disabled={isSubmitting}
+                        className="h-11 px-4 bg-white border border-slate-200 text-slate-600 text-xs font-bold rounded-xl hover:bg-slate-50"
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {errorMsg && <p className="text-[10px] text-red-500 font-bold mb-3 text-center">{errorMsg}</p>}
+                    <Button
+                      onClick={handleSubmit}
+                      disabled={isSubmitting || !horaSeleccionada || esDiaCerrado}
+                      className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl shadow-xl shadow-indigo-100 transition-all active:scale-95 disabled:bg-slate-300 disabled:shadow-none"
+                    >
+                      {isSubmitting ? "Procesando..." : esDiaCerrado ? "CERRADO" : "Confirmar Cita"}
+                    </Button>
+                  </>
+                )}
               </div>
 
             </div>
