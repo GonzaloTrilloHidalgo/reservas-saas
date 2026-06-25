@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { Layers, Mail, Lock, ArrowRight, Loader2, CheckCircle2, Building2, Eye, EyeOff } from "lucide-react";
+import PasswordStrength from "@/components/PasswordStrength";
 
 // Traduce los errores de Supabase (vienen en inglés) a mensajes claros en español.
 function traducirError(mensaje: string): string {
@@ -13,6 +14,8 @@ function traducirError(mensaje: string): string {
     return "Ese email ya tiene una cuenta. Inicia sesión.";
   if (m.includes("password should be at least"))
     return "La contraseña es demasiado corta (mínimo 8 caracteres).";
+  if (m.includes("at least one character of each") || m.includes("password should contain"))
+    return "La contraseña debe incluir minúscula, mayúscula, número y un carácter especial.";
   if (m.includes("password is known to be weak") || m.includes("pwned") || m.includes("compromised"))
     return "Esa contraseña aparece en filtraciones conocidas. Elige otra más segura.";
   if (m.includes("email not confirmed"))
@@ -198,9 +201,7 @@ export default function LoginPage() {
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
-              {!isLogin && (
-                <p className="mt-2 text-xs text-slate-400 font-medium">Mínimo 8 caracteres.</p>
-              )}
+              {!isLogin && <PasswordStrength password={password} />}
             </div>
 
             <button
