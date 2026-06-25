@@ -127,7 +127,7 @@ export default function ClientesPage() {
         <div className="flex min-h-screen bg-slate-50 relative overflow-hidden">
             <Sidebar />
             <main className="flex-1 flex flex-col h-screen overflow-y-auto relative">
-                <header className="h-16 border-b border-slate-200 bg-white flex items-center justify-between px-8 shrink-0">
+                <header className="h-16 border-b border-slate-200 bg-white flex items-center justify-between pl-16 pr-8 lg:px-8 shrink-0">
                     <h2 className="text-sm font-bold text-slate-800 uppercase tracking-widest">Directorio de Clientes</h2>
                     <button onClick={() => setIsModalOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-indigo-100 transition-all active:scale-95">
                         <Plus size={16} /> Nuevo Cliente

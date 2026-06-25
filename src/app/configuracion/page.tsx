@@ -159,7 +159,7 @@ async function cargarFestivos(currentAjustesId: number) {
     <div className="flex min-h-screen bg-slate-50 relative">
       <Sidebar />
       <main className="flex-1 flex flex-col h-screen overflow-y-auto relative">
-        <header className="h-16 border-b border-slate-200 bg-white flex items-center px-4 md:px-8 shrink-0">
+        <header className="h-16 border-b border-slate-200 bg-white flex items-center pl-16 pr-4 lg:px-8 shrink-0">
           <h2 className="text-sm font-bold text-slate-800 uppercase tracking-widest">Configuración General</h2>
         </header>
 
