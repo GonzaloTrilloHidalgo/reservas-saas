@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import Sidebar from "@/components/Sidebar";
+import SuscripcionCard from "@/components/SuscripcionCard";
 import { Festivo } from "@/types";
 import { 
   Settings, Clock, Building2, Save, CheckCircle2, 
@@ -173,7 +174,10 @@ async function cargarFestivos(currentAjustesId: number) {
         )}
 
         <div className="p-4 md:p-8 max-w-4xl mx-auto w-full space-y-6 md:space-y-8 pb-24 overflow-x-hidden">
-          
+
+          {/* SECCIÓN 0: SUSCRIPCIÓN */}
+          <SuscripcionCard />
+
           {/* SECCIÓN 1: HORARIOS Y NEGOCIO */}
           <section className="bg-white rounded-2xl md:rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-4 md:p-6 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">

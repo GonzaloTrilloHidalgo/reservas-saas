@@ -10,8 +10,34 @@ const EMAIL_CONTACTO = "gonzalotrillohidalgo@gmail.com";
 
 export default function BloqueadoPage() {
   const [cargando, setCargando] = useState(true);
+  const [procesando, setProcesando] = useState(false);
   const [nombreNegocio, setNombreNegocio] = useState("");
   const router = useRouter();
+
+  // Inicia el pago: si Stripe está configurado, va a Checkout; si no, email.
+  const activarSuscripcion = async () => {
+    setProcesando(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session?.access_token ?? ""}` },
+      });
+      if (res.ok) {
+        const { url } = await res.json();
+        if (url) {
+          window.location.href = url;
+          return;
+        }
+      }
+      // Stripe no configurado o error → caemos al email de contacto.
+      window.location.href = `mailto:${EMAIL_CONTACTO}?subject=Quiero activar mi cuenta de Velo`;
+    } catch {
+      window.location.href = `mailto:${EMAIL_CONTACTO}?subject=Quiero activar mi cuenta de Velo`;
+    } finally {
+      setProcesando(false);
+    }
+  };
 
   useEffect(() => {
     async function comprobar() {
@@ -74,12 +100,13 @@ export default function BloqueadoPage() {
             Para seguir usando Velo y recuperar el acceso a tu agenda, activa tu suscripción.
           </p>
 
-          <a
-            href={`mailto:${EMAIL_CONTACTO}?subject=Quiero activar mi cuenta de Velo`}
-            className="w-full inline-flex items-center justify-center gap-2 text-base font-bold text-white bg-indigo-600 hover:bg-indigo-700 px-7 py-4 rounded-2xl shadow-lg shadow-indigo-200 transition-all"
+          <button
+            onClick={activarSuscripcion}
+            disabled={procesando}
+            className="w-full inline-flex items-center justify-center gap-2 text-base font-bold text-white bg-indigo-600 hover:bg-indigo-700 px-7 py-4 rounded-2xl shadow-lg shadow-indigo-200 transition-all disabled:opacity-60"
           >
-            Activar mi suscripción
-          </a>
+            {procesando ? <Loader2 size={18} className="animate-spin" /> : "Activar mi suscripción · 30€/mes"}
+          </button>
 
           <p className="text-xs text-slate-400 mt-4">
             Tus datos están a salvo. Al activar la cuenta los recuperas tal cual los dejaste.
