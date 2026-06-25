@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Plus, AlertCircle, User, Phone, ChevronDown, CalendarIcon, Clock, Check, Search, Coffee, Ban } from "lucide-react";
+import { Plus, AlertCircle, User, Phone, CalendarIcon, Ban } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import {
   Dialog,
@@ -193,7 +193,7 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
 
     const slots = [];
     for (let h = horaApertura; h < horaCierre; h++) {
-      for (let m of ["00", "15", "30", "45"]) {
+      for (const m of ["00", "15", "30", "45"]) {
         const horaHito = `${String(h).padStart(2, "0")}:${m}`;
         const inicioCita = new Date(`${fecha}T${horaHito}:00`);
         const finCita = new Date(inicioCita.getTime() + duracionMinutos * 60000);

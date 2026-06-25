@@ -95,7 +95,7 @@ export default function CalendarView() {
 
   useEffect(() => {
     cargarDatosIniciales();
-    const handleResize = () => { window.innerWidth < 768 ? setView("day") : setView("week") };
+    const handleResize = () => { if (window.innerWidth < 768) setView("day"); else setView("week"); };
     handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
@@ -278,8 +278,8 @@ export default function CalendarView() {
           justifyContent: "center",
           fontWeight: "900",
           fontSize: "11px",
-          pointerEvents: "none" as "none",
-          textTransform: "uppercase" as "uppercase",
+          pointerEvents: "none" as const,
+          textTransform: "uppercase" as const,
         }
       };
     }

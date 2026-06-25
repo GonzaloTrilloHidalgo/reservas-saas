@@ -162,7 +162,7 @@ export default function PaginaReservaPublica({ params }: { params: Promise<{ slu
     const esHoy = fecha === ahora.toISOString().split("T")[0];
 
     for (let h = horaApertura; h < horaCierre; h++) {
-      for (let m of ["00", "30"]) { 
+      for (const m of ["00", "30"]) {
         const horaHito = `${String(h).padStart(2, "0")}:${m}`;
         const inicioCita = new Date(`${fecha}T${horaHito}:00`);
         const finCita = new Date(inicioCita.getTime() + duracion * 60000);

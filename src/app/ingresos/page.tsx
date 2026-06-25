@@ -28,7 +28,7 @@ interface CitaIngreso {
 
 export default function IngresosPage() {
   const [citas, setCitas] = useState<CitaIngreso[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   
   // Controlador de notificaciones flotantes (Toasts)
   const [toast, setToast] = useState<{ mensaje: string; tipo: "error" | "exito" } | null>(null);
