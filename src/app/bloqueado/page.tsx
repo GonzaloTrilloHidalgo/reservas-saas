@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { Layers, Lock, LogOut, Loader2 } from "lucide-react";
 
-// Email de contacto para activar la cuenta (cámbialo por el tuyo).
-const EMAIL_CONTACTO = "hola@velo.app";
+// Email de contacto para activar la cuenta.
+const EMAIL_CONTACTO = "gonzalotrillohidalgo@gmail.com";
 
 export default function BloqueadoPage() {
   const [cargando, setCargando] = useState(true);
