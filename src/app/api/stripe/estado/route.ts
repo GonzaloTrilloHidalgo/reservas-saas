@@ -28,10 +28,16 @@ export async function POST(request: NextRequest) {
 
   try {
     const sub = await stripe.subscriptions.retrieve(negocio.stripe_subscription_id);
+
+    // Fecha de cancelación: cancel_at si existe; si no, el fin del periodo actual
+    // (en esta versión de la API el periodo vive en los items de la suscripción).
+    const finPeriodoItem = sub.items?.data?.[0]?.current_period_end ?? null;
+    const cancelaSegundos = sub.cancel_at ?? (sub.cancel_at_period_end ? finPeriodoItem : null);
+
     return NextResponse.json({
       status: sub.status,
       cancelaAlTerminar: sub.cancel_at_period_end,
-      cancelaEl: sub.cancel_at ? sub.cancel_at * 1000 : null, // ms
+      cancelaEl: cancelaSegundos ? cancelaSegundos * 1000 : null, // ms
     });
   } catch {
     return NextResponse.json({ status: "none" });

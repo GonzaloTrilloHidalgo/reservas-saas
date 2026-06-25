@@ -12,6 +12,7 @@ export default function SuscripcionCard() {
   const [activa, setActiva] = useState(false);
   const [tieneCliente, setTieneCliente] = useState(false);
   const [diasPrueba, setDiasPrueba] = useState<number | null>(null);
+  const [cancelaAlTerminar, setCancelaAlTerminar] = useState(false);
   const [cancelaEl, setCancelaEl] = useState<number | null>(null);
 
   useEffect(() => {
@@ -40,7 +41,10 @@ export default function SuscripcionCard() {
               headers: { Authorization: `Bearer ${session?.access_token ?? ""}` },
             });
             const est = await res.json().catch(() => ({}));
-            if (est?.cancelaAlTerminar && est?.cancelaEl) setCancelaEl(est.cancelaEl);
+            if (est?.cancelaAlTerminar) {
+              setCancelaAlTerminar(true);
+              if (est.cancelaEl) setCancelaEl(est.cancelaEl);
+            }
           } catch {
             // si falla, simplemente no mostramos el aviso de cancelación
           }
@@ -92,11 +96,11 @@ export default function SuscripcionCard() {
         </div>
         {activa && (
           <span className={`ml-auto inline-flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-full border ${
-            fechaCancela
+            cancelaAlTerminar
               ? "text-amber-600 bg-amber-50 border-amber-100"
               : "text-emerald-600 bg-emerald-50 border-emerald-100"
           }`}>
-            <CheckCircle2 size={14} /> {fechaCancela ? "Se cancela pronto" : "Activa"}
+            <CheckCircle2 size={14} /> {cancelaAlTerminar ? "Se cancela pronto" : "Activa"}
           </span>
         )}
       </div>
@@ -107,10 +111,10 @@ export default function SuscripcionCard() {
         </p>
       )}
 
-      {activa && fechaCancela && (
+      {activa && cancelaAlTerminar && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-3">
           <p className="text-sm text-amber-700">
-            Tu suscripción seguirá <strong>activa hasta el {fechaCancela}</strong>. Ese día se cancelará y perderás el acceso. Puedes reactivarla antes desde &quot;Gestionar suscripción&quot;.
+            Tu suscripción seguirá <strong>activa{fechaCancela ? ` hasta el ${fechaCancela}` : " hasta el final del periodo actual"}</strong>. Llegada esa fecha se cancelará y perderás el acceso. Puedes reactivarla antes desde &quot;Gestionar suscripción&quot;.
           </p>
         </div>
       )}
