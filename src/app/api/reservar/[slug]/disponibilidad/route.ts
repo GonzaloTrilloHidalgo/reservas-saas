@@ -14,7 +14,7 @@ export async function GET(
   const { slug } = await params;
 
   // Rate limit: máx. 60 consultas por minuto por IP (el portal consulta a menudo).
-  if (!rateLimit(`disp:${ipDe(request)}`, 60, 60_000)) {
+  if (!(await rateLimit(`disp:${ipDe(request)}`, 60, 60_000))) {
     return NextResponse.json({ error: "Demasiadas solicitudes." }, { status: 429 });
   }
 

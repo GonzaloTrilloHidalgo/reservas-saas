@@ -16,7 +16,7 @@ export async function POST(
   const { slug } = await params;
 
   // Rate limit: máx. 5 reservas por minuto por IP (frena spam de citas).
-  if (!rateLimit(`cita:${ipDe(request)}`, 5, 60_000)) {
+  if (!(await rateLimit(`cita:${ipDe(request)}`, 5, 60_000))) {
     return NextResponse.json(
       { error: "Demasiadas solicitudes. Espera un momento e inténtalo de nuevo." },
       { status: 429 }

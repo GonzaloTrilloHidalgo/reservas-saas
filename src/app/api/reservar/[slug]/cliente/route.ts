@@ -15,7 +15,7 @@ export async function GET(
 
   // Rate limit estricto: este endpoint podría usarse para enumerar teléfonos.
   // Máx. 15 consultas por minuto por IP.
-  if (!rateLimit(`cliente:${ipDe(request)}`, 15, 60_000)) {
+  if (!(await rateLimit(`cliente:${ipDe(request)}`, 15, 60_000))) {
     return NextResponse.json(
       { error: "Demasiadas solicitudes. Espera un momento." },
       { status: 429 }

@@ -13,7 +13,7 @@ export async function GET(
   const { slug } = await params;
 
   // Rate limit anti-scraping: máx. 30 cargas por minuto por IP.
-  if (!rateLimit(`portal:${ipDe(request)}`, 30, 60_000)) {
+  if (!(await rateLimit(`portal:${ipDe(request)}`, 30, 60_000))) {
     return NextResponse.json({ error: "Demasiadas solicitudes." }, { status: 429 });
   }
 
