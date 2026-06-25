@@ -22,6 +22,7 @@ export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
   const [nombreNegocio, setNombreNegocio] = useState("Velo");
   const [emailUsuario, setEmailUsuario] = useState("");
+  const [diasPrueba, setDiasPrueba] = useState<number | null>(null);
   const [cerrandoSesion, setCerrandoSesion] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
@@ -40,14 +41,22 @@ export default function Sidebar() {
 
       setEmailUsuario(user.email ?? "");
 
-      // Buscamos el ID del negocio del usuario actual
+      // Buscamos el negocio del usuario actual (con su estado de prueba)
       const { data: miNegocio } = await supabase
         .from("negocios")
-        .select("id")
+        .select("id, trial_ends_at, suscripcion_activa")
         .eq("auth_user_id", user.id)
         .single();
 
       if (!miNegocio) return;
+
+      // Días restantes de prueba (solo si no está suscrito)
+      if (!miNegocio.suscripcion_activa && miNegocio.trial_ends_at) {
+        const ms = new Date(miNegocio.trial_ends_at).getTime() - Date.now();
+        setDiasPrueba(Math.max(0, Math.ceil(ms / 86_400_000)));
+      } else {
+        setDiasPrueba(null);
+      }
 
       // Buscamos los ajustes de ese negocio específico
       const { data } = await supabase
@@ -149,6 +158,23 @@ export default function Sidebar() {
             <div className="px-5 pt-4">
               <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">Sesión iniciada</p>
               <p className="text-sm font-semibold text-slate-600 truncate" title={emailUsuario}>{emailUsuario}</p>
+            </div>
+          )}
+
+          {/* Aviso de prueba gratuita */}
+          {diasPrueba !== null && (
+            <div className="px-4 pt-3">
+              <div className={`rounded-lg px-3 py-2 text-center border ${
+                diasPrueba <= 3
+                  ? "bg-amber-50 border-amber-200 text-amber-700"
+                  : "bg-indigo-50 border-indigo-100 text-indigo-700"
+              }`}>
+                <p className="text-xs font-bold">
+                  {diasPrueba === 0
+                    ? "Tu prueba termina hoy"
+                    : `Prueba gratuita · ${diasPrueba} ${diasPrueba === 1 ? "día" : "días"}`}
+                </p>
+              </div>
             </div>
           )}
 

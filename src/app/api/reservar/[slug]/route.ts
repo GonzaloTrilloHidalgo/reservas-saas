@@ -19,12 +19,18 @@ export async function GET(
 
   const { data: negocio, error } = await supabaseAdmin
     .from("negocios")
-    .select("id, nombre")
+    .select("id, nombre, trial_ends_at, suscripcion_activa")
     .eq("slug", slug)
     .single();
 
   if (error || !negocio) {
     return NextResponse.json({ error: "Negocio no encontrado" }, { status: 404 });
+  }
+
+  // Negocio con la prueba caducada y sin suscripción: reservas no disponibles.
+  const activo = negocio.suscripcion_activa || new Date(negocio.trial_ends_at).getTime() > Date.now();
+  if (!activo) {
+    return NextResponse.json({ error: "inactivo" }, { status: 403 });
   }
 
   const [{ data: ajustes }, { data: servicios }, { data: profesionales }] =

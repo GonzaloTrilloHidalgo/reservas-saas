@@ -5,20 +5,28 @@ import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { Loader2 } from "lucide-react";
 
+// ¿El negocio del usuario tiene la prueba caducada y sin suscripción activa?
+async function estaBloqueado(userId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from("negocios")
+    .select("trial_ends_at, suscripcion_activa")
+    .eq("auth_user_id", userId)
+    .single();
+  if (!data) return false;
+  if (data.suscripcion_activa) return false;
+  return new Date(data.trial_ends_at).getTime() < Date.now();
+}
+
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
   // Rutas públicas: no requieren sesión iniciada.
-  //  - "/"          → landing comercial
-  //  - "/login"     → registro / inicio de sesión
-  //  - "/reservar/*"→ portal público de reservas que el negocio comparte
   const isPublicRoute =
     pathname === "/" ||
     pathname === "/login" ||
     pathname.startsWith("/reservar");
 
-  // En rutas públicas renderizamos al instante (sin "comprobando credenciales").
   const [isLoading, setIsLoading] = useState(!isPublicRoute);
 
   useEffect(() => {
@@ -26,24 +34,31 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
       const { data: { session } } = await supabase.auth.getSession();
 
       if (!session && !isPublicRoute) {
-        // No hay sesión y la ruta es privada → al login
         router.replace("/login");
-      } else if (session && pathname === "/login") {
-        // Ya tiene sesión y entra al login → al panel
-        router.replace("/agenda");
-      } else {
-        setIsLoading(false);
+        return;
       }
+      if (session && pathname === "/login") {
+        router.replace("/agenda");
+        return;
+      }
+
+      // En rutas privadas, comprobamos que la prueba/suscripción sigue válida.
+      if (session && !isPublicRoute && pathname !== "/bloqueado") {
+        if (await estaBloqueado(session.user.id)) {
+          router.replace("/bloqueado");
+          return;
+        }
+      }
+
+      setIsLoading(false);
     };
 
     checkAuth();
 
-    // Escuchamos cambios de sesión (logout / login)
     const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_OUT" && !isPublicRoute) {
         router.push("/login");
       } else if (event === "SIGNED_IN" && pathname === "/login") {
-        // Solo redirigimos si NO estamos en medio de un registro
         if (!sessionStorage.getItem("is_registering")) {
           router.push("/agenda");
         }
@@ -55,7 +70,6 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
     };
   }, [pathname, router, isPublicRoute]);
 
-  // Pantalla de carga solo en rutas privadas mientras comprobamos la sesión
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">

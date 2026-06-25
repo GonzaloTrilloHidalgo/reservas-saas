@@ -79,12 +79,18 @@ export async function POST(
   // 1. Negocio
   const { data: negocio } = await supabaseAdmin
     .from("negocios")
-    .select("id")
+    .select("id, trial_ends_at, suscripcion_activa")
     .eq("slug", slug)
     .single();
 
   if (!negocio) {
     return NextResponse.json({ error: "Negocio no encontrado" }, { status: 404 });
+  }
+
+  // Negocio con la prueba caducada y sin suscripción: no acepta reservas.
+  const activo = negocio.suscripcion_activa || new Date(negocio.trial_ends_at).getTime() > Date.now();
+  if (!activo) {
+    return NextResponse.json({ error: "Las reservas no están disponibles en este momento." }, { status: 403 });
   }
 
   // 2. Servicio (precio y duración autoritativos desde la BD)

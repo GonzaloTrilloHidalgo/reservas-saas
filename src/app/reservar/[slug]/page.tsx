@@ -33,6 +33,7 @@ export default function PaginaReservaPublica({ params }: { params: Promise<{ slu
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [negocioNoEncontrado, setNegocioNoEncontrado] = useState(false);
+  const [negocioInactivo, setNegocioInactivo] = useState(false);
 
   // IDENTIFICADORES MULTI-TENANT (SaaS)
   const [negocioIdActual, setNegocioIdActual] = useState<string | null>(null);
@@ -88,7 +89,8 @@ export default function PaginaReservaPublica({ params }: { params: Promise<{ slu
       try {
         const res = await fetch(`/api/reservar/${slugDelNegocio}`);
         if (!res.ok) {
-          setNegocioNoEncontrado(true);
+          if (res.status === 403) setNegocioInactivo(true);
+          else setNegocioNoEncontrado(true);
           return;
         }
         const data = await res.json();
@@ -274,6 +276,18 @@ export default function PaginaReservaPublica({ params }: { params: Promise<{ slu
           <Ban size={48} className="mx-auto text-slate-300 mb-4" />
           <h1 className="text-xl font-black text-slate-800 mb-2">Página no encontrada</h1>
           <p className="text-slate-500 text-sm">La dirección de reservas a la que intentas acceder no existe en Velo Engine.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (negocioInactivo) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="bg-white p-8 rounded-3xl shadow-xl text-center max-w-md border border-slate-200">
+          <Ban size={48} className="mx-auto text-slate-300 mb-4" />
+          <h1 className="text-xl font-black text-slate-800 mb-2">Reservas no disponibles</h1>
+          <p className="text-slate-500 text-sm">Este negocio no está aceptando reservas online en este momento. Inténtalo más tarde o contacta directamente con él.</p>
         </div>
       </div>
     );
