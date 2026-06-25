@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Calendar, dateFnsLocalizer, View } from "react-big-calendar";
+import { Calendar, dateFnsLocalizer, View, ToolbarProps } from "react-big-calendar";
 import { format, parse, startOfWeek, getDay, isToday, isSameWeek } from "date-fns";
 import { es } from "date-fns/locale";
 import "react-big-calendar/lib/css/react-big-calendar.css";
@@ -34,7 +34,20 @@ interface CitaCalendario {
   estado?: string; 
 }
 
-const CustomToolbar = (toolbar: any) => {
+// Fila de cita tal cual la devuelve Supabase (con los joins a profesionales y clientes).
+interface CitaRowDB {
+  id: string;
+  servicio: string;
+  cliente_nombre: string;
+  fecha_inicio: string;
+  fecha_fin: string;
+  precio: number | null;
+  estado: string | null;
+  profesionales: { nombre: string | null; color: string | null } | null;
+  clientes: { telefono: string | null } | null;
+}
+
+const CustomToolbar = (toolbar: ToolbarProps<CitaCalendario, object>) => {
   const goToBack = () => toolbar.onNavigate('PREV');
   const goToNext = () => toolbar.onNavigate('NEXT');
   const goToCurrent = () => toolbar.onNavigate('TODAY');
@@ -58,7 +71,7 @@ const CustomToolbar = (toolbar: any) => {
       </h2>
 
       <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl overflow-hidden p-1 gap-1">
-        {['day', 'week', 'month'].map((viewName) => (
+        {(['day', 'week', 'month'] as View[]).map((viewName) => (
           <button
             key={viewName}
             onClick={() => toolbar.onView(viewName)}
@@ -160,9 +173,9 @@ export default function CalendarView() {
     if (error) return console.error("Error al cargar:", error.message);
 
     if (citasData) {
-      const citasFormateadas = citasData
-        .filter((cita: any) => cita.estado !== 'cancelada')
-        .map((cita: any) => {
+      const citasFormateadas = (citasData as unknown as CitaRowDB[])
+        .filter((cita) => cita.estado !== 'cancelada')
+        .map((cita) => {
           const esBloqueo = cita.servicio === "Bloqueo";
           return {
             id: cita.id,
@@ -176,7 +189,7 @@ export default function CalendarView() {
             telefono: cita.clientes?.telefono || "",
             cliente_nombre: cita.cliente_nombre,
             servicio: cita.servicio,
-            estado: cita.estado 
+            estado: cita.estado ?? undefined
           };
         });
       setAllEvents(citasFormateadas);

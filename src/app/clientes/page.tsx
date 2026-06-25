@@ -70,7 +70,7 @@ export default function ClientesPage() {
         setNotasEditables(cliente.notas || "");
         setCargandoHistorial(true);
         const { data } = await supabase.from("citas").select(`id, fecha_inicio, servicio, precio, profesionales (nombre), estado`).eq("cliente_id", cliente.id).order("fecha_inicio", { ascending: false });
-        if (data) setHistorialCitas(data as any);
+        if (data) setHistorialCitas(data as unknown as CitaHistorial[]);
         setCargandoHistorial(false);
     }
 

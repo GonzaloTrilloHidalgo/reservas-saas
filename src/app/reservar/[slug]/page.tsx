@@ -11,6 +11,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Servicio, Profesional } from "@/types";
 
 const PREFIJOS = [
   { iso: "es", code: "+34", country: "España" },
@@ -35,16 +36,16 @@ export default function PaginaReservaPublica({ params }: { params: Promise<{ slu
   const [nombreNegocioVisual, setNombreNegocioVisual] = useState("");
 
   // DATOS DE LA BASE DE DATOS
-  const [servicios, setServicios] = useState<any[]>([]);
-  const [profesionales, setProfesionales] = useState<any[]>([]);
+  const [servicios, setServicios] = useState<Servicio[]>([]);
+  const [profesionales, setProfesionales] = useState<Profesional[]>([]);
   const [horaApertura, setHoraApertura] = useState(9);
   const [horaCierre, setHoraCierre] = useState(20);
   const [inicioDescanso, setInicioDescanso] = useState(14);
   const [finDescanso, setFinDescanso] = useState(15);
 
   // SELECCIONES DEL CLIENTE
-  const [servicioSeleccionado, setServicioSeleccionado] = useState<any>(null);
-  const [profesionalSeleccionado, setProfesionalSeleccionado] = useState<any>(null);
+  const [servicioSeleccionado, setServicioSeleccionado] = useState<Servicio | null>(null);
+  const [profesionalSeleccionado, setProfesionalSeleccionado] = useState<Profesional | null>(null);
   const [fecha, setFecha] = useState("");
   const [horaSeleccionada, setHoraSeleccionada] = useState<string | null>(null);
 
@@ -140,6 +141,7 @@ export default function PaginaReservaPublica({ params }: { params: Promise<{ slu
   }, [fecha, profesionalSeleccionado, servicioSeleccionado, esDiaCerrado]);
 
   const calcularHuecos = async () => {
+    if (!servicioSeleccionado || !profesionalSeleccionado) return;
     setCargandoHuecos(true);
     setHoraSeleccionada(null);
 
@@ -222,6 +224,7 @@ export default function PaginaReservaPublica({ params }: { params: Promise<{ slu
 
   const confirmarReserva = async () => {
     if (!nombre || !telefono || !horaSeleccionada || !negocioIdActual) return;
+    if (!servicioSeleccionado || !profesionalSeleccionado) return;
     setIsSubmitting(true);
 
     try {

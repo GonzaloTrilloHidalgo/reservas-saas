@@ -13,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Servicio, Profesional, Cliente } from "@/types";
 
 interface NewAppointmentProps {
   onAppointmentCreated: () => void;
@@ -44,9 +45,9 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const [profesionales, setProfesionales] = useState<any[]>([]);
-  const [servicios, setServicios] = useState<any[]>([]);
-  const [clientesCRM, setClientesCRM] = useState<any[]>([]);
+  const [profesionales, setProfesionales] = useState<Profesional[]>([]);
+  const [servicios, setServicios] = useState<Servicio[]>([]);
+  const [clientesCRM, setClientesCRM] = useState<Cliente[]>([]);
 
   const [clienteNombre, setClienteNombre] = useState("");
   const [clientePrefijo, setClientePrefijo] = useState("+34"); 
@@ -223,15 +224,16 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
     setCargandoHuecos(false);
   }
 
-  const seleccionarCliente = (cliente: any) => {
+  const seleccionarCliente = (cliente: Cliente) => {
     setClienteNombre(cliente.nombre);
-    if (cliente.telefono) {
-      const pFound = PREFIJOS.find(p => cliente.telefono.startsWith(p.code));
+    const tel = cliente.telefono;
+    if (tel) {
+      const pFound = PREFIJOS.find(p => tel.startsWith(p.code));
       if (pFound) {
         setClientePrefijo(pFound.code);
-        setClienteTelefono(cliente.telefono.slice(pFound.code.length));
+        setClienteTelefono(tel.slice(pFound.code.length));
       } else {
-        setClienteTelefono(cliente.telefono);
+        setClienteTelefono(tel);
       }
     }
     setClienteIdSeleccionado(cliente.id);
@@ -246,7 +248,7 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
     await supabase.from("citas").insert([{
       cliente_nombre: tipo === "cita" ? nombreMostrar : "BLOQUEO",
       cliente_id: clienteIdFinal,
-      servicio: tipo === "cita" ? servicios.find(s => s.id == servicioId)?.nombre : "Bloqueo",
+      servicio: tipo === "cita" ? servicios.find(s => String(s.id) === servicioId)?.nombre : "Bloqueo",
       profesional_id: profesionalId,
       negocio_id: negocioIdActual,
       fecha_inicio: start,
@@ -404,7 +406,7 @@ export default function NewAppointmentButton({ onAppointmentCreated }: NewAppoin
                     <div className="space-y-2">
                       <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest">Servicio</Label>
                       <select value={servicioId} onChange={(e) => {
-                        const serv = servicios.find(s => s.id == e.target.value);
+                        const serv = servicios.find(s => String(s.id) === e.target.value);
                         setServicioId(e.target.value);
                         setPrecioActual(serv?.precio ?? "");
                         // Autocompletamos la duración con la del servicio

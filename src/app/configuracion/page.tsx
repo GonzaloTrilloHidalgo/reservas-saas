@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import Sidebar from "@/components/Sidebar";
+import { Festivo } from "@/types";
 import { 
   Settings, Clock, Building2, Save, CheckCircle2, 
   AlertCircle, Coffee, CalendarOff, Trash2, Plus 
@@ -23,7 +24,7 @@ export default function ConfiguracionPage() {
   const [negocioId, setNegocioId] = useState<string | null>(null);
 
   // Estados de Festivos
-  const [festivos, setFestivos] = useState<any[]>([]);
+  const [festivos, setFestivos] = useState<Festivo[]>([]);
   const [nuevaFechaCierre, setNuevaFechaCierre] = useState("");
   const [nuevoMotivo, setNuevoMotivo] = useState("");
 
@@ -119,8 +120,8 @@ async function cargarFestivos(currentAjustesId: number) {
     // Volvemos a cargar los datos para obtener el ajustesId si era nuevo
     cargarDatos();
 
-  } catch (error: any) {
-    mostrarNotificacion(error.message, "error");
+  } catch (error) {
+    mostrarNotificacion(error instanceof Error ? error.message : "Error al guardar", "error");
   } finally {
     setIsSaving(false);
   }

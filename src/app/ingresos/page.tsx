@@ -46,7 +46,14 @@ export default function IngresosPage() {
       .eq("estado", "completada"); // <-- MAGIA FINANCIERA: Solo traemos lo que realmente se ha cobrado
 
     if (!error && data) {
-      const ingresosFormateados = data.map((cita: any) => ({
+      const ingresosFormateados = (data as unknown as {
+        id: string;
+        precio: number | null;
+        fecha_inicio: string;
+        servicio: string | null;
+        cliente_nombre: string | null;
+        profesionales: { nombre: string } | null;
+      }[]).map((cita) => ({
         id: cita.id,
         precio: Number(cita.precio) || 0,
         fecha_inicio: cita.fecha_inicio,
