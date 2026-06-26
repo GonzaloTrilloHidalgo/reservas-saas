@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { usuarioDeRequest } from "@/lib/auth-server";
+import { rateLimit, ipDe } from "@/lib/rate-limit";
 
 // Normaliza un texto a un slug seguro: sin acentos, minúsculas, solo
 // letras/números/guiones, sin guiones al principio/final.
@@ -17,6 +18,10 @@ function sanitizarSlug(raw: string): string {
 // POST /api/negocio/slug  { slug: "mi-barberia" }
 // Cambia el slug público del negocio del usuario, validando que sea único.
 export async function POST(request: NextRequest) {
+  if (!(await rateLimit(`negocio-slug:${ipDe(request)}`, 10, 60_000))) {
+    return NextResponse.json({ error: "Demasiadas solicitudes." }, { status: 429 });
+  }
+
   const user = await usuarioDeRequest(request);
   if (!user) {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { usuarioDeRequest } from "@/lib/auth-server";
+import { rateLimit, ipDe } from "@/lib/rate-limit";
 
 // POST /api/stripe/estado
 // Devuelve el estado real de la suscripción del negocio (si está programada para
@@ -9,6 +10,10 @@ import { usuarioDeRequest } from "@/lib/auth-server";
 export async function POST(request: NextRequest) {
   if (!stripe) {
     return NextResponse.json({ status: "none" });
+  }
+
+  if (!(await rateLimit(`stripe-estado:${ipDe(request)}`, 30, 60_000))) {
+    return NextResponse.json({ error: "Demasiadas solicitudes." }, { status: 429 });
   }
 
   const user = await usuarioDeRequest(request);
