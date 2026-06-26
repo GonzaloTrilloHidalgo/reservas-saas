@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { esFecha, esHora, esTelefono, nombreLimpio } from "@/lib/validacion";
 import { rateLimit, ipDe } from "@/lib/rate-limit";
+import { horaLocalAUtcISO } from "@/lib/fechas";
 
 const UN_ANIO_MS = 365 * 24 * 60 * 60 * 1000;
 
@@ -120,7 +121,8 @@ export async function POST(
   }
 
   const duracion = servicio.duracion || 60;
-  const inicio = new Date(`${fecha}T${hora}:00`);
+  // Interpretamos la hora en la zona del negocio (no en UTC del servidor).
+  const inicio = new Date(horaLocalAUtcISO(fecha, hora));
   const fin = new Date(inicio.getTime() + duracion * 60000);
 
   // No permitimos citas en el pasado ni a más de un año vista.
